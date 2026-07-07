@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>West Malaysia District Explorer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1a2b2e; --paper:#f7f5f0; --panel:#ffffff;
+    --teal-1:#d7e8e3; --teal-2:#9cc9bd; --teal-3:#5ba392; --teal-4:#2e7364; --teal-5:#174a40;
+    --amber:#e0a422; --line:#e3ded4; --muted:#6b7a76;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'IBM Plex Sans',sans-serif;color:var(--ink);background:var(--paper);height:100vh;display:flex;flex-direction:column}
+  header{padding:12px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--panel);gap:16px;flex-wrap:wrap}
+  header h1{font-family:'Archivo',sans-serif;font-weight:800;font-size:19px;letter-spacing:-0.02em}
+  header h1 span{color:var(--teal-4)}
+  header .right{display:flex;align-items:center;gap:14px}
+  header .src{font-size:11px;color:var(--muted)}
+  select{font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:7px 10px;border:1.5px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);cursor:pointer}
+  .wrap{flex:1;display:flex;min-height:0}
+  #map{flex:1;background:#e8efec}
+  aside{width:360px;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:20px}
+  aside .empty{color:var(--muted);font-size:14px;line-height:1.6;margin-top:8px}
+  .dname{font-family:'Archivo',sans-serif;font-weight:800;font-size:26px;letter-spacing:-0.02em}
+  .dsub{font-size:12px;color:var(--muted);margin-bottom:16px}
+  .big{font-family:'Archivo',sans-serif;font-weight:800;font-size:40px;color:var(--teal-5);line-height:1}
+  .big small{font-size:13px;font-weight:500;color:var(--muted);font-family:'IBM Plex Sans',sans-serif;display:block;margin-top:4px}
+  .row{display:flex;gap:20px;margin:16px 0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .row div{flex:1}
+  .row b{font-family:'Archivo',sans-serif;font-size:18px;font-weight:700;display:block}
+  .row span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em}
+  h3{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin:18px 0 8px}
+  .ebar{margin-bottom:7px}
+  .ebar .lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+  .ebar .track{height:7px;background:var(--teal-1);border-radius:4px;overflow:hidden}
+  .ebar .fill{height:100%;background:var(--teal-4);border-radius:4px}
+  svg.trend{width:100%;height:90px;margin-top:4px}
+  .cmp-btn{width:100%;margin-top:18px;padding:11px;font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;border:2px solid var(--teal-5);background:none;color:var(--teal-5);border-radius:6px;cursor:pointer}
+  .cmp-btn.active,.cmp-btn:hover{background:var(--teal-5);color:#fff}
+  .cmp-note{font-size:12px;color:var(--amber);font-weight:600;margin-top:8px;display:none}
+  .cmp-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+  .cmp-table th{font-family:'Archivo',sans-serif;font-size:13px;text-align:right;padding:6px 4px;border-bottom:2px solid var(--ink)}
+  .cmp-table th:first-child{text-align:left}
+  .cmp-table td{text-align:right;padding:6px 4px;border-bottom:1px solid var(--line)}
+  .cmp-table td:first-child{text-align:left;color:var(--muted)}
+  .win{color:var(--teal-4);font-weight:600}
+  .legend{position:absolute;bottom:18px;left:12px;z-index:1000;background:var(--panel);padding:10px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.15);font-size:11px}
+  .legend .grad{width:140px;height:9px;border-radius:4px;background:linear-gradient(90deg,var(--teal-1),var(--teal-2),var(--teal-3),var(--teal-4),var(--teal-5));margin:5px 0 3px}
+  .legend .ends{display:flex;justify-content:space-between;color:var(--muted)}
+  .legend .note{color:var(--muted);margin-top:3px;font-size:10px}
+  .leaflet-container{font-family:'IBM Plex Sans',sans-serif}
+  .leaflet-interactive:focus{outline:none}
+  .leaflet-interactive:focus-visible{outline:2px solid var(--amber)}
+  @media(max-width:760px){.wrap{flex-direction:column}aside{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>West Malaysia <span>District Explorer</span></h1>
+  <div class="right">
+    <select id="stateSel"><option value="">All states</option></select>
+    <div class="src">Population 2025 &middot; Income/Poverty 2024 &middot; DOSM &middot; geoBoundaries</div>
+  </div>
+</header>
+<div class="wrap">
+  <div id="map">
+    <div class="legend"><b>Population (quintiles)</b><div class="grad"></div><div class="ends"><span id="lg-min"></span><span id="lg-max"></span></div><div class="note">Each shade = 20% of districts</div></div>
+  </div>
+  <aside id="panel">
+    <div class="empty"><b>Click a district</b> to see its population, breakdown by sex and ethnicity, and growth since 2020.<br><br>Use the <b>state dropdown</b> to zoom to a state, and <b>Compare</b> to put any two districts side by side &mdash; even across states.</div>
+  </aside>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+async function main(){
+const DATA = await (await fetch('data.json')).json();
+
+const ETH_LABELS = {bumi_malay:"Malay", bumi_other:"Other Bumiputera", chinese:"Chinese", indian:"Indian", other_citizen:"Other citizens", other_noncitizen:"Non-citizens"};
+const fmt = v => v>=1000 ? (v/1000).toFixed(2)+"M" : Math.round(v)+"k";
+const rm = v => "RM " + v.toLocaleString();
+
+// quantile (quintile) color bins - population is heavily skewed, linear scale would wash out the map
+const sortedPops = DATA.features.map(f=>f.properties.stats.total).sort((a,b)=>a-b);
+const q = p => sortedPops[Math.min(sortedPops.length-1, Math.floor(p*sortedPops.length))];
+const BREAKS = [q(0.2), q(0.4), q(0.6), q(0.8)];
+const RAMP = ["#d7e8e3","#9cc9bd","#5ba392","#2e7364","#174a40"];
+const color = p => RAMP[BREAKS.filter(b=>p>b).length];
+document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
+document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
+
+const map = L.map("map",{scrollWheelZoom:true});
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+  {attribution:"&copy; OpenStreetMap &copy; CARTO", maxZoom:12}).addTo(map);
+
+let selected=null, compareMode=false, compareFirst=null;
+const stateLayers = {};
+
+const layer = L.geoJSON(DATA,{
+  style: f => ({fillColor:color(f.properties.stats.total), fillOpacity:.75, color:"#f7f5f0", weight:1.2}),
+  onEachFeature:(f,l)=>{
+    const st = f.properties.stats.state;
+    (stateLayers[st] = stateLayers[st] || []).push(l);
+    l.bindTooltip(f.properties.shapeName + " &middot; " + fmt(f.properties.stats.total), {sticky:true});
+    l.on("mouseover",()=>{ if(l!==selected) l.setStyle({weight:3,color:"#e0a422"}); });
+    l.on("mouseout",()=>{ if(l!==selected) layer.resetStyle(l); });
+    l.on("click",()=>onClick(f,l));
+  }
+}).addTo(map);
+map.fitBounds(layer.getBounds().pad(0.03));
+
+// state dropdown
+const sel = document.getElementById("stateSel");
+Object.keys(stateLayers).sort().forEach(st=>{
+  const o=document.createElement("option"); o.value=o.textContent=st; sel.appendChild(o);
+});
+sel.onchange = ()=>{
+  if(!sel.value){ map.fitBounds(layer.getBounds().pad(0.03)); return; }
+  const g = L.featureGroup(stateLayers[sel.value]);
+  map.fitBounds(g.getBounds().pad(0.06));
+};
+
+function onClick(f,l){
+  if(compareMode && compareFirst && compareFirst.f!==f){
+    renderCompare(compareFirst.f, f);
+    compareMode=false;
+    return;
+  }
+  if(selected) layer.resetStyle(selected);
+  selected=l;
+  l.setStyle({weight:3.5,color:"#1a2b2e"});
+  renderDistrict(f);
+}
+
+function trendSVG(trend){
+  const w=316,h=90,p=14;
+  const ys=trend.map(t=>t[1]);
+  const y0=Math.min(...ys)*0.98, y1=Math.max(...ys)*1.02;
+  const X=i=>p+i*(w-2*p)/(trend.length-1);
+  const Y=v=>h-p-(v-y0)*(h-2*p)/(y1-y0);
+  let path="M"+trend.map((t,i)=>X(i)+","+Y(t[1])).join(" L");
+  let area=path+" L"+X(trend.length-1)+","+(h-p)+" L"+X(0)+","+(h-p)+" Z";
+  const dots=trend.map((t,i)=>`<circle cx="${X(i)}" cy="${Y(t[1])}" r="2.5" fill="#174a40"/>`).join("");
+  const labels=`<text x="${X(0)}" y="${h-2}" font-size="10" fill="#6b7a76">${trend[0][0]}</text>
+    <text x="${X(trend.length-1)}" y="${h-2}" font-size="10" fill="#6b7a76" text-anchor="end">${trend[trend.length-1][0]}</text>`;
+  return `<svg class="trend" viewBox="0 0 ${w} ${h}">
+    <path d="${area}" fill="#d7e8e3"/><path d="${path}" fill="none" stroke="#2e7364" stroke-width="2"/>${dots}${labels}</svg>`;
+}
+
+function renderDistrict(f){
+  const s=f.properties.stats, name=f.properties.shapeName;
+  const growth=((s.trend.at(-1)[1]/s.trend[0][1]-1)*100).toFixed(1);
+  const eth=Object.entries(s.ethnicity).sort((a,b)=>b[1]-a[1]);
+  const ethHtml=eth.map(([k,v])=>{
+    const pct=(v/s.total*100);
+    return `<div class="ebar"><div class="lbl"><span>${ETH_LABELS[k]||k}</span><span>${pct.toFixed(1)}%</span></div>
+      <div class="track"><div class="fill" style="width:${pct}%"></div></div></div>`;
+  }).join("");
+  document.getElementById("panel").innerHTML=`
+    <div class="dname">${name}</div>
+    <div class="dsub">${s.state} &middot; 2025 estimates</div>
+    <div class="big">${fmt(s.total)}<small>residents</small></div>
+    <div class="row">
+      <div><b>${fmt(s.male)}</b><span>Male</span></div>
+      <div><b>${fmt(s.female)}</b><span>Female</span></div>
+      <div><b>${growth>0?"+":""}${growth}%</b><span>Since 2020</span></div>
+    </div>
+    <h3>Population trend 2020&ndash;2025</h3>
+    ${trendSVG(s.trend)}
+    <h3>Household income &middot; ${s.income_year}</h3>
+    <div class="row" style="margin-top:6px">
+      <div><b>${rm(s.income_median)}</b><span>Median / month</span></div>
+      <div><b>${rm(s.income_mean)}</b><span>Mean / month</span></div>
+    </div>
+    <h3>Median income trend 2019&ndash;${s.income_year}</h3>
+    ${trendSVG(s.income_trend)}
+    <h3>Poverty &middot; ${s.income_year}</h3>
+    <div class="row" style="margin-top:6px">
+      <div><b>${s.poverty_absolute}%</b><span>Absolute</span></div>
+      <div><b>${s.poverty_relative}%</b><span>Relative</span></div>
+    </div>
+    <h3>Ethnicity</h3>
+    ${ethHtml}
+    <button class="cmp-btn" id="cmpBtn">Compare with another district</button>
+    <div class="cmp-note" id="cmpNote">Now click a second district on the map</div>`;
+  document.getElementById("cmpBtn").onclick=()=>{
+    compareMode=true; compareFirst={f};
+    document.getElementById("cmpBtn").classList.add("active");
+    document.getElementById("cmpNote").style.display="block";
+  };
+}
+
+function renderCompare(fa,fb){
+  const a=fa.properties.stats, b=fb.properties.stats;
+  const ga=((a.trend.at(-1)[1]/a.trend[0][1]-1)*100), gb=((b.trend.at(-1)[1]/b.trend[0][1]-1)*100);
+  const rows=[
+    ["Population", fmt(a.total), fmt(b.total), a.total>b.total],
+    ["Male", fmt(a.male), fmt(b.male), a.male>b.male],
+    ["Female", fmt(a.female), fmt(b.female), a.female>b.female],
+    ["Growth since 2020", ga.toFixed(1)+"%", gb.toFixed(1)+"%", ga>gb],
+    ["Median income", rm(a.income_median), rm(b.income_median), a.income_median>b.income_median],
+    ["Mean income", rm(a.income_mean), rm(b.income_mean), a.income_mean>b.income_mean],
+    ["Poverty (absolute)", a.poverty_absolute+"%", b.poverty_absolute+"%", a.poverty_absolute<b.poverty_absolute],
+  ].map(r=>`<tr><td>${r[0]}</td><td class="${r[3]?'win':''}">${r[1]}</td><td class="${!r[3]?'win':''}">${r[2]}</td></tr>`).join("");
+  document.getElementById("panel").innerHTML=`
+    <div class="dname" style="font-size:20px">${fa.properties.shapeName} vs ${fb.properties.shapeName}</div>
+    <div class="dsub">${a.state} vs ${b.state} &middot; 2025</div>
+    <table class="cmp-table">
+      <tr><th></th><th>${fa.properties.shapeName}</th><th>${fb.properties.shapeName}</th></tr>
+      ${rows}
+    </table>
+    <h3>${fa.properties.shapeName} trend</h3>${trendSVG(a.trend)}
+    <h3>${fb.properties.shapeName} trend</h3>${trendSVG(b.trend)}
+    <button class="cmp-btn" onclick="location.reload()">Reset</button>`;
+}
+
+}
+main().catch(e=>{
+  document.getElementById('panel').innerHTML =
+    '<div class="empty"><b>Could not load data.json.</b><br><br>' +
+    'If you opened this file by double-clicking, that is the problem: browsers block local file fetches. ' +
+    'Serve it instead: run <code>python -m http.server</code> in this folder and open http://localhost:8000</div>';
+  console.error(e);
+});
+</script>
+</body>
+</html>
