@@ -1,1 +1,0 @@
-# west_malaysia_map
