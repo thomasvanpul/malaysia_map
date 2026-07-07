@@ -63,7 +63,7 @@
   <h1>West Malaysia <span>District Explorer</span></h1>
   <div class="right">
     <select id="stateSel"><option value="">All states</option></select>
-    <div class="src">Population 2025 &middot; Income/Poverty 2024 &middot; DOSM &middot; geoBoundaries</div>
+    <div class="src">DOSM 2024/25 &middot; OSM amenities &middot; geoBoundaries</div>
   </div>
 </header>
 <div class="wrap">
@@ -152,6 +152,7 @@ function trendSVG(trend){
 
 function renderDistrict(f){
   const s=f.properties.stats, name=f.properties.shapeName;
+  const am=s.amenities||{rail_stations:0,malls:0,supermarkets:0,rail_names:[],mall_names:[]};
   const growth=((s.trend.at(-1)[1]/s.trend[0][1]-1)*100).toFixed(1);
   const eth=Object.entries(s.ethnicity).sort((a,b)=>b[1]-a[1]);
   const ethHtml=eth.map(([k,v])=>{
@@ -182,6 +183,14 @@ function renderDistrict(f){
       <div><b>${s.poverty_absolute}%</b><span>Absolute</span></div>
       <div><b>${s.poverty_relative}%</b><span>Relative</span></div>
     </div>
+    <h3>Amenities <span style="text-transform:none;letter-spacing:0">(OpenStreetMap)</span></h3>
+    <div class="row" style="margin-top:6px">
+      <div><b>${am.rail_stations}</b><span>Rail stations</span></div>
+      <div><b>${am.malls}</b><span>Malls</span></div>
+      <div><b>${am.supermarkets}</b><span>Supermarkets</span></div>
+    </div>
+    ${am.mall_names.length ? `<div style="font-size:12px;color:var(--muted);margin:-6px 0 4px">Malls incl. ${am.mall_names.slice(0,4).join(", ")}</div>` : ""}
+    ${am.rail_names.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Stations incl. ${am.rail_names.slice(0,4).join(", ")}</div>` : ""}
     <h3>Ethnicity</h3>
     ${ethHtml}
     <button class="cmp-btn" id="cmpBtn">Compare with another district</button>
@@ -195,6 +204,7 @@ function renderDistrict(f){
 
 function renderCompare(fa,fb){
   const a=fa.properties.stats, b=fb.properties.stats;
+  const A=a.amenities||{rail_stations:0,malls:0,supermarkets:0}, B=b.amenities||{rail_stations:0,malls:0,supermarkets:0};
   const ga=((a.trend.at(-1)[1]/a.trend[0][1]-1)*100), gb=((b.trend.at(-1)[1]/b.trend[0][1]-1)*100);
   const rows=[
     ["Population", fmt(a.total), fmt(b.total), a.total>b.total],
@@ -204,6 +214,9 @@ function renderCompare(fa,fb){
     ["Median income", rm(a.income_median), rm(b.income_median), a.income_median>b.income_median],
     ["Mean income", rm(a.income_mean), rm(b.income_mean), a.income_mean>b.income_mean],
     ["Poverty (absolute)", a.poverty_absolute+"%", b.poverty_absolute+"%", a.poverty_absolute<b.poverty_absolute],
+    ["Rail stations", A.rail_stations, B.rail_stations, A.rail_stations>B.rail_stations],
+    ["Malls", A.malls, B.malls, A.malls>B.malls],
+    ["Supermarkets", A.supermarkets, B.supermarkets, A.supermarkets>B.supermarkets],
   ].map(r=>`<tr><td>${r[0]}</td><td class="${r[3]?'win':''}">${r[1]}</td><td class="${!r[3]?'win':''}">${r[2]}</td></tr>`).join("");
   document.getElementById("panel").innerHTML=`
     <div class="dname" style="font-size:20px">${fa.properties.shapeName} vs ${fb.properties.shapeName}</div>

@@ -132,6 +132,18 @@ def main():
             s["poverty_relative"] = float(last["poverty_relative"])
         ft["properties"]["stats"] = s
 
+    # merge amenities (OSM-derived, generated separately by fetch_amenities.py)
+    try:
+        with open("amenities.json") as f:
+            amen = json.load(f)
+        for ft in feats:
+            a = amen.get(ft["properties"]["shapeName"])
+            if a:
+                ft["properties"]["stats"]["amenities"] = a
+        print("amenities merged.")
+    except FileNotFoundError:
+        print("WARNING: amenities.json not found — building without amenities layer.")
+
     # every feature must have every layer — no silent partial data
     incomplete = [ft["properties"]["shapeName"] for ft in feats
                   if "income_median" not in ft["properties"]["stats"]
