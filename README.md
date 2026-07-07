@@ -34,7 +34,7 @@ recognise — that's intentional. Fix the CLEAN mapping, don't bypass it.
 ## Deploy (GitHub Pages — free)
 1. Push this folder to a GitHub repository
 2. Repo Settings -> Pages -> Source: main branch, root
-3. Site is live at https://USERNAME.github.io/REPO/
+3. Site is live at https://thomasvanpul.github.io/REPO/
 4. The weekly Action keeps data.json fresh automatically (Actions tab ->
    "Rebuild data.json from DOSM" -> Run workflow, to test it once manually)
 
