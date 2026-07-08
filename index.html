@@ -65,6 +65,8 @@
   .chip.rail.on{background:#174a40;border-color:#174a40}
   .chip.mall.on{background:#a94e2c;border-color:#a94e2c}
   .chip.sup.on{background:#5f6f24;border-color:#5f6f24}
+  .chip.transit.on{background:#333;border-color:#333}
+
   .marker-dot{border:1.5px solid #fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.35)}
   .cluster{background:rgba(23,74,64,.85);color:#fff;font-family:'Archivo',sans-serif;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 </style>
@@ -77,9 +79,10 @@
       <span class="chip rail" data-layer="rail"><span class="dot"></span>Rail</span>
       <span class="chip mall" data-layer="mall"><span class="dot"></span>Malls</span>
       <span class="chip sup" data-layer="sup"><span class="dot"></span>Supermarkets</span>
+      <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit lines</span>
     </div>
     <select id="stateSel"><option value="">All states</option></select>
-    <div class="src">DOSM 2024/25 &middot; OSM amenities &middot; geoBoundaries</div>
+    <div class="src">DOSM 2024/25 &middot; OSM amenities + transit &middot; geoBoundaries</div>
   </div>
 </header>
 <div class="wrap">
@@ -94,6 +97,9 @@
 <script>
 async function main(){
 const DATA = await (await fetch('data.json')).json();
+let TRANSIT = {routes:[]};
+try { TRANSIT = await (await fetch('transit.json')).json(); }
+catch(e) { console.warn('transit.json missing, skipping transit layer'); }
 
 const ETH_LABELS = {bumi_malay:"Malay", bumi_other:"Other Bumiputera", chinese:"Chinese", indian:"Indian", other_citizen:"Other citizens", other_noncitizen:"Non-citizens"};
 const fmt = v => v>=1000 ? (v/1000).toFixed(2)+"M" : Math.round(v)+"k";
@@ -123,7 +129,22 @@ const amenityLayers = {
   rail: L.layerGroup(),
   mall: L.layerGroup(),
   sup:  L.layerGroup(),
+  transit: L.layerGroup(),
 };
+// Populate transit lines
+(TRANSIT.routes || []).forEach(route => {
+  const color = route.color || "#666";
+  (route.chains || []).forEach(chain => {
+    if (chain.length < 2) return;
+    const latlngs = chain.map(([lon, lat]) => [lat, lon]);
+    // Casing (dark outline) for legibility over the base map
+    L.polyline(latlngs, {color:"#1a2b2e", weight:5, opacity:0.35, interactive:false})
+      .addTo(amenityLayers.transit);
+    L.polyline(latlngs, {color, weight:3, opacity:0.95})
+      .bindTooltip(route.name + (route.ref ? " (" + route.ref + ")" : ""), {sticky:true})
+      .addTo(amenityLayers.transit);
+  });
+});
 function collectPoints(kind){
   const pts=[];
   DATA.features.forEach(f=>{
@@ -143,7 +164,7 @@ function buildLayer(kind){
     layer.addLayer(m);
   });
 }
-["rail","mall","sup"].forEach(buildLayer);
+["rail","mall","sup"].forEach(buildLayer);  // transit populated inline above
 // Chips
 document.querySelectorAll(".chip").forEach(chip=>{
   chip.onclick = ()=>{
