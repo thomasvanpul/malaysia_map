@@ -1,21 +1,14 @@
 """
-fetch_amenities.py — run this in Google Colab (free), NOT locally required.
+fetch_amenities.py — pulls OSM amenities for West Malaysia, keeps coordinates.
 
-What it does:
-  1. Downloads the district polygons from YOUR live GitHub Pages site
-  2. Queries OpenStreetMap (Overpass API) for West Malaysia:
-       - rail stations (MRT/LRT/KTM/monorail)
-       - shopping malls
-       - supermarkets
-  3. Assigns every amenity to its district (point-in-polygon)
-  4. Writes amenities.json  -> download it and upload back to Claude
+Output: amenities.json
+  { district_name: { rail_stations: [{name,lat,lon},...],
+                     malls:         [{name,lat,lon},...],
+                     supermarkets:  [{name,lat,lon},...] } }
 
-How to run in Colab:
-  1. https://colab.research.google.com -> New notebook
-  2. Paste this whole file into a cell
-  3. FIX THE REPO URL on the line marked <<< FIX ME
-  4. Run the cell (takes ~2-5 min, mostly waiting for Overpass)
-  5. Files panel (left sidebar) -> download amenities.json
+Point-in-polygon assignment uses the same geoBoundaries file the site uses,
+fetched from the live GitHub Pages so a boundary change on the site is
+automatically reflected here.
 """
 
 import json
@@ -24,20 +17,16 @@ import requests
 from shapely.geometry import shape, Point
 from shapely.prepared import prep
 
-# <<< FIX ME: your GitHub Pages URL, no trailing slash
 SITE = "https://thomasvanpul.github.io/west_malaysia_map"
-
 GEOJSON_URL = SITE + "/geoBoundaries-MYS-ADM2_simplified.geojson"
-# Multiple mirrors: the main instance blocks generic user agents and shared IPs (Colab).
+
 OVERPASS_MIRRORS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
-HEADERS = {"User-Agent": "west-malaysia-district-explorer/1.0 (student project)"}
-
-# West Malaysia bounding box: (south, west, north, east)
-BBOX = "0.8,99.4,6.9,104.7"
+HEADERS = {"User-Agent": "west-malaysia-district-explorer/1.1 (student project)"}
+BBOX = "0.8,99.4,6.9,104.7"  # West Malaysia bounding box
 
 QUERIES = {
     "rail_stations": f"""
@@ -64,9 +53,9 @@ def overpass(query):
         r = requests.post(url, data={"data": query}, headers=HEADERS, timeout=360)
         if r.status_code == 200:
             return r.json()["elements"]
-        print(f"  {url.split('/')[2]} returned {r.status_code}, trying next mirror in 15s...")
+        print(f"  {url.split('/')[2]} returned {r.status_code}, next mirror in 15s...")
         time.sleep(15)
-    raise RuntimeError("All Overpass mirrors refused. 406=blocked request, 429=rate limit, 504=server busy.")
+    raise RuntimeError("All Overpass mirrors refused. 406=blocked, 429=rate-limited, 504=busy.")
 
 
 def coords(el):
@@ -79,18 +68,16 @@ def coords(el):
 
 print("downloading district polygons...")
 geo = requests.get(GEOJSON_URL, timeout=60).json()
-districts = {}
-for f in geo["features"]:
-    districts[f["properties"]["shapeName"]] = prep(shape(f["geometry"]))
+districts = {f["properties"]["shapeName"]: prep(shape(f["geometry"]))
+             for f in geo["features"]}
 print(f"  {len(districts)} districts loaded")
 
-result = {d: {"rail_stations": 0, "malls": 0, "supermarkets": 0,
-              "rail_names": [], "mall_names": []} for d in districts}
+result = {d: {"rail_stations": [], "malls": [], "supermarkets": []} for d in districts}
 
 for kind, q in QUERIES.items():
     print(f"querying OSM for {kind}...")
     elements = overpass(q)
-    print(f"  {len(elements)} found, assigning to districts...")
+    print(f"  {len(elements)} found, assigning...")
     assigned = 0
     for el in elements:
         c = coords(el)
@@ -99,22 +86,27 @@ for kind, q in QUERIES.items():
         p = Point(c)
         for dname, poly in districts.items():
             if poly.contains(p):
-                result[dname][kind] += 1
                 name = el.get("tags", {}).get("name")
-                if name and kind == "rail_stations" and len(result[dname]["rail_names"]) < 12:
-                    result[dname]["rail_names"].append(name)
-                if name and kind == "malls" and len(result[dname]["mall_names"]) < 8:
-                    result[dname]["mall_names"].append(name)
+                # store coord rounded to 5dp (~1m precision) to keep file small
+                result[dname][kind].append({
+                    "name": name,
+                    "lat": round(c[1], 5),
+                    "lon": round(c[0], 5),
+                })
                 assigned += 1
                 break
     print(f"  {assigned} inside West Malaysia districts")
-    time.sleep(10)  # be polite to the free API between queries
+    time.sleep(10)
 
 with open("amenities.json", "w") as f:
     json.dump(result, f, ensure_ascii=False)
 
-top = sorted(result.items(), key=lambda kv: -kv[1]["malls"])[:5]
+top = sorted(result.items(), key=lambda kv: -len(kv[1]["malls"]))[:5]
 print("\nTop 5 districts by mall count (sanity check):")
 for d, v in top:
-    print(f"  {d}: {v['malls']} malls, {v['supermarkets']} supermarkets, {v['rail_stations']} rail stations")
-print("\nDONE — download amenities.json from the Files panel and upload it to Claude.")
+    print(f"  {d}: {len(v['malls'])} malls, {len(v['supermarkets'])} supermarkets, {len(v['rail_stations'])} rail stations")
+
+# rough file size
+import os
+print(f"\namenities.json size: {os.path.getsize('amenities.json')//1024} KB")
+print("DONE.")

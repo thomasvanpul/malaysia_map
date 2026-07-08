@@ -133,13 +133,25 @@ def main():
         ft["properties"]["stats"] = s
 
     # merge amenities (OSM-derived, generated separately by fetch_amenities.py)
+    # amenities.json format: {district: {rail_stations:[{name,lat,lon},...], malls:[...], supermarkets:[...]}}
     try:
         with open("amenities.json") as f:
             amen = json.load(f)
         for ft in feats:
             a = amen.get(ft["properties"]["shapeName"])
             if a:
-                ft["properties"]["stats"]["amenities"] = a
+                # emit counts alongside arrays so old panel/compare code still works
+                ft["properties"]["stats"]["amenities"] = {
+                    "rail_stations": len(a.get("rail_stations", [])),
+                    "malls":         len(a.get("malls", [])),
+                    "supermarkets":  len(a.get("supermarkets", [])),
+                    "rail_names":    [x["name"] for x in a.get("rail_stations", []) if x.get("name")][:12],
+                    "mall_names":    [x["name"] for x in a.get("malls", []) if x.get("name")][:8],
+                    # full coord arrays for map markers
+                    "rail_points":        a.get("rail_stations", []),
+                    "mall_points":        a.get("malls", []),
+                    "supermarket_points": a.get("supermarkets", []),
+                }
         print("amenities merged.")
     except FileNotFoundError:
         print("WARNING: amenities.json not found — building without amenities layer.")
