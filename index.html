@@ -56,12 +56,28 @@
   .leaflet-interactive:focus{outline:none}
   .leaflet-interactive:focus-visible{outline:2px solid var(--amber)}
   @media(max-width:760px){.wrap{flex-direction:column}aside{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--line)}}
+
+  .layers{display:flex;gap:6px}
+  .chip{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:6px 10px;border:1.5px solid var(--line);border-radius:20px;background:var(--paper);color:var(--muted);cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px}
+  .chip .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.5}
+  .chip.on{background:var(--teal-5);color:#fff;border-color:var(--teal-5)}
+  .chip.on .dot{opacity:1;background:#fff}
+  .chip.rail.on{background:#174a40;border-color:#174a40}
+  .chip.mall.on{background:#a94e2c;border-color:#a94e2c}
+  .chip.sup.on{background:#5f6f24;border-color:#5f6f24}
+  .marker-dot{border:1.5px solid #fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+  .cluster{background:rgba(23,74,64,.85);color:#fff;font-family:'Archivo',sans-serif;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 </style>
 </head>
 <body>
 <header>
   <h1>West Malaysia <span>District Explorer</span></h1>
   <div class="right">
+    <div class="layers">
+      <span class="chip rail" data-layer="rail"><span class="dot"></span>Rail</span>
+      <span class="chip mall" data-layer="mall"><span class="dot"></span>Malls</span>
+      <span class="chip sup" data-layer="sup"><span class="dot"></span>Supermarkets</span>
+    </div>
     <select id="stateSel"><option value="">All states</option></select>
     <div class="src">DOSM 2024/25 &middot; OSM amenities &middot; geoBoundaries</div>
   </div>
@@ -92,9 +108,50 @@ const color = p => RAMP[BREAKS.filter(b=>p>b).length];
 document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
-const map = L.map("map",{scrollWheelZoom:true});
+const map = L.map("map",{scrollWheelZoom:true, maxZoom:17});
 L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-  {attribution:"&copy; OpenStreetMap &copy; CARTO", maxZoom:12}).addTo(map);
+  {attribution:"&copy; OpenStreetMap &copy; CARTO", maxZoom:19}).addTo(map);
+
+// Amenity layers - built once, toggled by chips
+const COLORS = {rail:"#174a40", mall:"#a94e2c", sup:"#5f6f24"};
+const RADIUS = {rail:5, mall:4, sup:3};
+function makeDot(color, r){
+  return L.divIcon({className:"", iconSize:[r*2,r*2],
+    html:`<div class="marker-dot" style="width:${r*2}px;height:${r*2}px;background:${color}"></div>`});
+}
+const amenityLayers = {
+  rail: L.layerGroup(),
+  mall: L.layerGroup(),
+  sup:  L.layerGroup(),
+};
+function collectPoints(kind){
+  const pts=[];
+  DATA.features.forEach(f=>{
+    const a = f.properties.stats.amenities;
+    if(!a) return;
+    const arr = kind==="rail" ? a.rail_points : kind==="mall" ? a.mall_points : a.supermarket_points;
+    (arr||[]).forEach(p=>pts.push({...p, district:f.properties.shapeName}));
+  });
+  return pts;
+}
+function buildLayer(kind){
+  const layer = amenityLayers[kind];
+  const icon = makeDot(COLORS[kind], RADIUS[kind]);
+  collectPoints(kind).forEach(p=>{
+    const m = L.marker([p.lat, p.lon], {icon, keyboard:false});
+    if(p.name) m.bindTooltip(p.name + " &middot; " + p.district);
+    layer.addLayer(m);
+  });
+}
+["rail","mall","sup"].forEach(buildLayer);
+// Chips
+document.querySelectorAll(".chip").forEach(chip=>{
+  chip.onclick = ()=>{
+    const k = chip.dataset.layer;
+    if(chip.classList.toggle("on")) amenityLayers[k].addTo(map);
+    else map.removeLayer(amenityLayers[k]);
+  };
+});
 
 let selected=null, compareMode=false, compareFirst=null;
 const stateLayers = {};
@@ -132,6 +189,7 @@ function onClick(f,l){
   if(selected) layer.resetStyle(selected);
   selected=l;
   l.setStyle({weight:3.5,color:"#1a2b2e"});
+  map.fitBounds(l.getBounds().pad(0.15), {maxZoom:13});
   renderDistrict(f);
 }
 
