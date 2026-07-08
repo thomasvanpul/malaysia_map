@@ -66,6 +66,18 @@
   .chip.mall.on{background:#a94e2c;border-color:#a94e2c}
   .chip.sup.on{background:#5f6f24;border-color:#5f6f24}
   .chip.transit.on{background:#333;border-color:#333}
+  .amen-pop{font-family:'IBM Plex Sans',sans-serif;max-width:260px}
+  .amen-pop img{width:100%;height:140px;object-fit:cover;border-radius:6px 6px 0 0;display:block;background:#eee}
+  .amen-pop .body{padding:10px 12px 12px}
+  .amen-pop .name{font-family:'Archivo',sans-serif;font-weight:800;font-size:15px;line-height:1.2;color:var(--ink);margin-bottom:2px}
+  .amen-pop .kind{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:8px}
+  .amen-pop .field{font-size:12px;color:var(--ink);margin-top:5px;line-height:1.4}
+  .amen-pop .field b{color:var(--muted);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;display:block;margin-bottom:1px}
+  .amen-pop a{color:var(--teal-4);text-decoration:none;word-break:break-all}
+  .amen-pop a:hover{text-decoration:underline}
+  .leaflet-popup-content-wrapper{padding:0;border-radius:8px;overflow:hidden}
+  .leaflet-popup-content{margin:0;width:auto!important}
+
 
   .marker-dot{border:1.5px solid #fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.35)}
   .cluster{background:rgba(23,74,64,.85);color:#fff;font-family:'Archivo',sans-serif;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
@@ -155,12 +167,31 @@ function collectPoints(kind){
   });
   return pts;
 }
+const KIND_LABEL = {rail:"Rail station", mall:"Shopping mall", sup:"Supermarket"};
+function popupHTML(p, kind){
+  const parts = [];
+  if(p.image) parts.push(`<img src="${p.image}" alt="" onerror="this.style.display='none'">`);
+  parts.push('<div class="body">');
+  parts.push(`<div class="name">${p.name || "Unnamed"}</div>`);
+  parts.push(`<div class="kind">${KIND_LABEL[kind]} &middot; ${p.district}</div>`);
+  if(p.brand && p.brand !== p.name) parts.push(`<div class="field"><b>Brand</b>${p.brand}</div>`);
+  if(p.address) parts.push(`<div class="field"><b>Address</b>${p.address}</div>`);
+  if(p.hours) parts.push(`<div class="field"><b>Hours</b>${p.hours}</div>`);
+  if(p.phone) parts.push(`<div class="field"><b>Phone</b>${p.phone}</div>`);
+  if(p.website){
+    const url = p.website.startsWith("http") ? p.website : "https://"+p.website;
+    parts.push(`<div class="field"><b>Website</b><a href="${url}" target="_blank" rel="noopener">${p.website.replace(/^https?:\/\//,"")}</a></div>`);
+  }
+  parts.push('</div>');
+  return `<div class="amen-pop">${parts.join("")}</div>`;
+}
 function buildLayer(kind){
   const layer = amenityLayers[kind];
   const icon = makeDot(COLORS[kind], RADIUS[kind]);
   collectPoints(kind).forEach(p=>{
     const m = L.marker([p.lat, p.lon], {icon, keyboard:false});
-    if(p.name) m.bindTooltip(p.name + " &middot; " + p.district);
+    if(p.name) m.bindTooltip(p.name);  // quick hover label
+    m.bindPopup(popupHTML(p, kind), {maxWidth: 280, minWidth: 240});
     layer.addLayer(m);
   });
 }
