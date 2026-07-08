@@ -129,7 +129,7 @@ document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length
 
 const map = L.map("map",{scrollWheelZoom:true, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, zoomDelta:0.5, wheelPxPerZoomLevel:40});
 L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
-  {attribution:"attribution:"&copy; MapTiler &copy; OpenStreetMap", maxZoom:19, keepBuffer:6, updateWhenIdle:false}).addTo(map);
+  {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:6, updateWhenIdle:false}).addTo(map);
 
 // Amenity layers - built once, toggled by chips
 const COLORS = {rail:"#174a40", mall:"#a94e2c", sup:"#5f6f24"};
