@@ -1,23 +1,49 @@
 # West Malaysia District Explorer
 
-Interactive map: click any of 91 Peninsular Malaysia districts for population,
-household income, poverty rates, trends, and side-by-side comparison.
+An interactive choropleth map of all 91 Peninsular Malaysia districts. Click any
+district for its population, household income, poverty rates, ethnicity
+breakdown, and multi-year trends — or compare any two districts side by side,
+even across states. Amenity and transit layers overlay rail stations, malls,
+supermarkets, and the full MRT/LRT/KTM/Monorail/ETS network.
 
-Data: DOSM (population 2025; HIES income/poverty 2019/2022/2024).
-Boundaries: geoBoundaries ADM2.
+Live: https://thomasvanpul.github.io/west_malaysia_map/
+
+## What the map shows
+- **Choropleth** of district population, binned into quintiles (each shade = 20%
+  of districts) so the heavy skew doesn't wash the map out.
+- **District panel** (click a district): total / male / female population, growth
+  since 2020, median & mean household income, absolute & relative poverty,
+  ethnicity split, and trend sparklines for population and income.
+- **Compare** any two districts across every metric, including across states.
+- **State dropdown** to zoom to a single state, or back to the whole peninsula.
+- **Amenity layers** (toggle chips): rail stations, malls, supermarkets. Click a
+  dot for a popup with name, brand, address, hours, website, and a Wikimedia
+  Commons photo where a Wikidata link exists.
+- **Transit lines**: 15 deduplicated MRT/LRT/KTM/Monorail/ETS routes in their
+  official operator colors. Transit + malls are on by default.
+
+## Data sources
+- **DOSM** (Department of Statistics Malaysia): population 2025 estimates;
+  household income & poverty from HIES survey years 2019 / 2022 / 2024.
+- **geoBoundaries** ADM2 for district polygons.
+- **OpenStreetMap** via the Overpass API for amenities and transit geometry.
 
 ## Files
-- `index.html` — the entire app (Leaflet map + side panel)
-- `data.json` — all district shapes + stats (generated — do not edit by hand)
+- `index.html` — the entire app (Leaflet map + side panel), no build step
+- `data.json` — district shapes + stats + amenity points (generated — never edit by hand)
+- `transit.json` — deduplicated transit route geometry (generated; optional — the
+  map still loads without it)
 - `build_data.py` — pipeline: downloads DOSM parquets, cleans district names,
   validates the join, regenerates data.json
+- `clean_district_names.py` — the shared name-cleaning map applied to every dataset
 - `geoBoundaries-MYS-ADM2_simplified.geojson` — district polygons (pipeline input)
 - `.github/workflows/update-data.yml` — weekly auto-rebuild via GitHub Actions
 - `*.parquet` — local copies of the DOSM source data (used by `--local` mode)
+- `PROJECT_RECORD.md` — running log of decisions, data quirks, and the glossary
 
 ## Run locally
-Double-clicking index.html will NOT work — browsers block a local page from
-fetching data.json (CORS). Serve it instead. From this folder:
+Double-clicking `index.html` will NOT work — browsers block a local page from
+fetching `data.json`. Serve it instead. From this folder:
 
     python -m http.server
 
@@ -29,17 +55,25 @@ then open http://localhost:8000
     python build_data.py --local   # reuses the parquet files in this folder
 
 The pipeline fails loudly if DOSM introduces a district name it doesn't
-recognise — that's intentional. Fix the CLEAN mapping, don't bypass it.
+recognise — that's intentional. Fix the mapping in `clean_district_names.py`,
+don't bypass it.
 
 ## Deploy (GitHub Pages — free)
-1. Push this folder to a GitHub repository
-2. Repo Settings -> Pages -> Source: main branch, root
+1. Push this folder to a GitHub repository.
+2. Repo Settings → Pages → Source: `main` branch, root.
 3. Site is live at https://thomasvanpul.github.io/west_malaysia_map/
-4. The weekly Action keeps data.json fresh automatically (Actions tab ->
-   "Rebuild data.json from DOSM" -> Run workflow, to test it once manually)
+4. The weekly Action keeps `data.json` fresh automatically (Actions tab →
+   "Rebuild data.json from DOSM" → Run workflow, to test it once manually).
 
-## Known limitations
-- W.P. Putrajaya: stats exist, but the boundary file has no polygon for it
-- Income/poverty are survey years (HIES runs every ~2-3 years), not annual
-- The income/poverty parquet URLs in build_data.py should be verified once
-  against the actual download links on the OpenDOSM catalogue pages
+## Known limitations & data quirks
+- **W.P. Putrajaya**: stats exist, but the boundary file has no polygon for it —
+  it appears in data but not on the map.
+- **DOSM naming is inconsistent** across its own files (e.g. "Sp Selatan" vs
+  "S.P. Selatan", "Larut Dan Matang" vs "Larut & Matang"). The cleaning map must
+  be applied to every new dataset. A genuine DOSM data-entry error was also found
+  and fixed: a truncated "Hulu" row that was actually Hulu Terengganu.
+- **Income/poverty are survey years** (HIES runs every ~2–3 years), not annual.
+- **Supermarkets are gated to zoom ≥ 12** to avoid rendering ~3,000 dots at once.
+  Toggling the chip while zoomed out shows a "zoom in" hint rather than the dots.
+- **Singapore transit leaks** into the Overpass bounding box and is filtered out
+  by name-pattern and a minimum-latitude check during the transit build.

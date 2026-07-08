@@ -127,7 +127,7 @@ const color = p => RAMP[BREAKS.filter(b=>p>b).length];
 document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
-const map = L.map("map",{scrollWheelZoom:true, maxZoom:17});
+const map = L.map("map",{scrollWheelZoom:true, maxZoom:17, preferCanvas:true, maxBoundsViscosity:0.9});
 L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
   {attribution:"&copy; OpenStreetMap &copy; CARTO", maxZoom:19}).addTo(map);
 
@@ -156,6 +156,7 @@ function applyZoomVisibility(){
     if (z < minZ && map.hasLayer(amenityLayers[k])) map.removeLayer(amenityLayers[k]);
     else if (z >= minZ && !map.hasLayer(amenityLayers[k])) amenityLayers[k].addTo(map);
   });
+  if (typeof updateSupHint === "function") updateSupHint();
 }
 // Populate transit lines
 (TRANSIT.routes || []).forEach(route => {
@@ -208,6 +209,20 @@ function buildLayer(kind){
   });
 }
 ["rail","mall","sup"].forEach(buildLayer);  // transit populated inline above
+
+// Supermarkets are gated to zoom >= 12 (see ZOOM_HIDE) to avoid dumping ~3000
+// dots at once. Toggling the chip while zoomed out otherwise shows nothing with
+// no feedback — this floating hint tells the user why and how many are waiting.
+const supCount = collectPoints("sup").length;
+const supHint = document.createElement("div");
+supHint.style.cssText = "position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--panel);border:1.5px solid var(--amber);color:var(--ink);font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;box-shadow:0 1px 4px rgba(0,0,0,.18);display:none;pointer-events:none";
+document.getElementById("map").appendChild(supHint);
+function updateSupHint(){
+  const chip = document.querySelector('.chip[data-layer="sup"]');
+  const gated = chip && chip.classList.contains("on") && map.getZoom() < ZOOM_HIDE.sup;
+  supHint.textContent = `Zoom in to see ${supCount.toLocaleString()} supermarkets`;
+  supHint.style.display = gated ? "block" : "none";
+}
 // Chips
 document.querySelectorAll(".chip").forEach(chip=>{
   chip.onclick = ()=>{
@@ -215,15 +230,11 @@ document.querySelectorAll(".chip").forEach(chip=>{
     const on = chip.classList.toggle("on");
     if (on) {
       const minZ = ZOOM_HIDE[k];
-      if (minZ && map.getZoom() < minZ) {
-        // Show a brief "zoom in" hint instead of dumping thousands of dots
-        chip.title = `Zoom in to level ${minZ}+ to see supermarkets`;
-      } else {
-        amenityLayers[k].addTo(map);
-      }
+      if (!(minZ && map.getZoom() < minZ)) amenityLayers[k].addTo(map);
     } else {
       map.removeLayer(amenityLayers[k]);
     }
+    if (k === "sup") updateSupHint();
   };
 });
 // Default view: transit lines + malls on
@@ -243,12 +254,13 @@ const layer = L.geoJSON(DATA,{
     const st = f.properties.stats.state;
     (stateLayers[st] = stateLayers[st] || []).push(l);
     l.bindTooltip(f.properties.shapeName + " &middot; " + fmt(f.properties.stats.total), {sticky:true});
-    l.on("mouseover",()=>{ if(l!==selected) l.setStyle({weight:3,color:"#e0a422"}); });
+    l.on("mouseover",()=>{ if(l!==selected) l.setStyle({stroke:true,weight:3,color:"#e0a422"}); });
     l.on("mouseout",()=>{ if(l!==selected) layer.resetStyle(l); });
     l.on("click",()=>onClick(f,l));
   }
 }).addTo(map);
 map.fitBounds(layer.getBounds().pad(0.03));
+map.setMaxBounds(layer.getBounds().pad(0.5));
 
 // District borders as a single top layer so shared edges don't double-stroke
 const borderLayer = L.geoJSON(DATA, {
@@ -263,14 +275,7 @@ Object.keys(stateLayers).sort().forEach(st=>{
   const o=document.createElement("option"); o.value=o.textContent=st; sel.appendChild(o);
 });
 sel.onchange = ()=>{
-  if(!sel.value){ map.fitBounds(layer.getBounds().pad(0.03));
-
-// District borders as a single top layer so shared edges don't double-stroke
-const borderLayer = L.geoJSON(DATA, {
-  style: {color:"#f7f5f0", weight:1.2, fill:false, interactive:false}
-}).addTo(map);
-// Keep borders below markers but above fills — set a custom pane
-borderLayer.bringToFront(); return; }
+  if(!sel.value){ map.fitBounds(layer.getBounds().pad(0.03)); return; }
   const g = L.featureGroup(stateLayers[sel.value]);
   map.fitBounds(g.getBounds().pad(0.06));
 };
@@ -283,7 +288,7 @@ function onClick(f,l){
   }
   if(selected) layer.resetStyle(selected);
   selected=l;
-  l.setStyle({weight:3.5,color:"#1a2b2e"});
+  l.setStyle({stroke:true,weight:3.5,color:"#1a2b2e"});
   map.fitBounds(l.getBounds().pad(0.15), {maxZoom:13});
   renderDistrict(f);
 }
