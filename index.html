@@ -129,17 +129,22 @@ document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length
 
 const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, zoomDelta:0.1, wheelPxPerZoomLevel:30, bounceAtZoomLimits:false});
 
-// Smooth continuous zoom via wheel/trackpad — bypasses Leaflet's chunky default
+// Smooth trackpad zoom: accumulate delta, apply instantly (no animation queuing)
 (function(){
-  let zoom = null;
+  let target = null;
+  let frame = null;
   map.getContainer().addEventListener("wheel", function(e){
     e.preventDefault();
-    const delta = -e.deltaY * (e.deltaMode === 1 ? 0.05 : e.deltaMode === 2 ? 1 : 0.005);
-    if(zoom === null) zoom = map.getZoom();
-    zoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), zoom + delta));
-    map.setZoom(zoom, {animate:true});
+    const delta = -e.deltaY * (e.deltaMode === 1 ? 0.08 : e.deltaMode === 2 ? 1 : 0.008);
+    if(target === null) target = map.getZoom();
+    target = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), target + delta));
+    if(frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(function(){
+      map.setZoom(target, {animate:false});
+      frame = null;
+    });
   }, {passive:false});
-  map.on("zoomstart", function(){ zoom = null; });
+  map.on("zoomend", function(){ target = null; });
 })();
 L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
   {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:6, updateWhenIdle:false}).addTo(map);
