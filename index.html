@@ -244,7 +244,7 @@
   <aside id="panel">
     <div class="panel-handle" id="panelHandle"></div>
     <div class="panel-peek" id="panelPeek">Click a district to explore</div>
-    <div class="empty"><b>Click a district</b> to see its population, breakdown by sex and ethnicity, and growth since 2020.<br><br>Use the <b>state dropdown</b> to zoom to a state, and <b>Compare</b> to put any two districts side by side &mdash; even across states.</div>
+    <div class="empty"><b>Click a district</b> to explore population, income, investment score and nearby projects.<br><br>Toggle <b>Transit lines</b> to see rail routes — click any line to see its stations.<br><br>Toggle <b>Projects</b> to see active housing developments. Zoom into street level to see malls, schools and hospitals.<br><br>Use <b>Search</b> to find any district, station or project by name.</div>
   </aside>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -310,7 +310,23 @@ const amenityLayers = {
   mall: L.layerGroup(),
   sup:  L.layerGroup(),
   transit: L.layerGroup(),
-  projects: L.markerClusterGroup({maxClusterRadius:50, disableClusteringAtZoom:13, chunkedLoading:true}),
+  projects: L.markerClusterGroup({
+    maxClusterRadius: 80,
+    disableClusteringAtZoom: 15,
+    chunkedLoading: true,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    iconCreateFunction: function(cluster){
+      const n = cluster.getChildCount();
+      const sz = n>50?52:n>20?44:36;
+      const col = "#7c3aed";
+      return L.divIcon({
+        className:"",
+        html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?11:13}px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+        iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
+      });
+    }
+  }),
   schools: L.layerGroup(),
   hospitals: L.layerGroup(),
 };
@@ -362,14 +378,9 @@ const PROJECT_STATUS_COLORS = {
   const color = PROJECT_STATUS_COLORS[proj.status] || "#999";
   const icon = L.divIcon({
     className:"",
-    iconSize:[26,32], iconAnchor:[13,32],
-    html:`<div class="proj-pin">
-      <div class="proj-pin-body" style="background:${color}">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
-          <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
-          <path d="M9 21V12h6v9" fill="white"/>
-        </svg>
-      </div>
+    iconSize:[20,24], iconAnchor:[10,24],
+    html:`<div style="width:20px;height:20px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center">
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="white" style="transform:rotate(45deg)"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/></svg>
     </div>`
   });
   const m = L.marker([proj.lat, proj.lon], {icon});
@@ -415,10 +426,10 @@ const amenityIconLayers = {
 let amenityZoomActive = false;
 function updateAmenityZoom(){
   const z=map.getZoom();
-  if(z>=13 && !amenityZoomActive){
+  if(z>=15 && !amenityZoomActive){
     Object.values(amenityIconLayers).forEach(lg=>lg.addTo(map));
     amenityZoomActive=true;
-  } else if(z<13 && amenityZoomActive){
+  } else if(z<15 && amenityZoomActive){
     Object.values(amenityIconLayers).forEach(lg=>map.removeLayer(lg));
     amenityZoomActive=false;
   }
@@ -498,8 +509,7 @@ const ALL_STATION_MARKERS=[];
           <b>${ln} ${ref}</b>
         </div>
       </div></div>`,{maxWidth:260});
-      amenityLayers.transit.addLayer(m);
-      ALL_STATION_MARKERS.push(m);
+      ALL_STATION_MARKERS.push(m);  // NOT added to transit layer by default
       if(!lineStationMarkers[ln]) lineStationMarkers[ln]=[];
       lineStationMarkers[ln].push(m);
     });
@@ -507,16 +517,16 @@ const ALL_STATION_MARKERS=[];
 })();
 
 function selectRoute(route,color){
-  // Shrink previous line's stations back to small
-  if(prevHL && lineStationMarkers[prevHL]) lineStationMarkers[prevHL].forEach(m=>m.setStyle({radius:5,weight:2}));
+  // Remove previous line's stations from map
+  if(prevHL && lineStationMarkers[prevHL]) lineStationMarkers[prevHL].forEach(m=>map.removeLayer(m));
   // Highlight selected line, dim others
   if(prevHL)Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
   Object.entries(routePolylines).forEach(([n,ps])=>
     ps.forEach(l=>l.setStyle(n===route.name?{weight:7,opacity:1}:{opacity:0.15,weight:3}))
   );
   prevHL=route.name;
-  // Enlarge this line's stations
-  if(lineStationMarkers[route.name]) lineStationMarkers[route.name].forEach(m=>m.setStyle({radius:8,weight:2.5}));
+  // Add this line's stations to map
+  if(lineStationMarkers[route.name]) lineStationMarkers[route.name].forEach(m=>{m.addTo(map);m.setStyle({radius:7,weight:2.5});});
   // Collect stations on this line
   const sts=new Set();
   DATA.features.forEach(f=>{
@@ -543,7 +553,7 @@ function selectRoute(route,color){
           <span style="font-size:13px">${s}</span>
         </div></div>`).join("")}
     </div>
-    <button class="cmp-btn" style="margin-top:16px" onclick="ALL_STATION_MARKERS.forEach(m=>m.setStyle({radius:5,weight:2}));Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));prevHL=null;">Reset all lines</button>`;
+    <button class="cmp-btn" style="margin-top:16px" onclick="ALL_STATION_MARKERS.forEach(m=>map.removeLayer(m));Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));prevHL=null;">Reset all lines</button>`;
   const h=document.getElementById("panelHandle");
   if(h)h.addEventListener("click",()=>document.getElementById("panel").classList.toggle("open"));
 }
