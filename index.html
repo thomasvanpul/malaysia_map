@@ -218,6 +218,9 @@
 
   /* Small amenity icons at high zoom */
   .mini-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
+  .leaflet-marker-icon{animation:fadeM 0.25s ease forwards}
+  @keyframes fadeM{from{opacity:0;transform:scale(0.6)}to{opacity:1;transform:scale(1)}}
 </style>
 </head>
 <body>
@@ -766,11 +769,12 @@ function trendSVG(trend){
 }
 
 function investScore(s){
-  // Score 0-100 combining: income growth, population growth, transit, project health, income level
-  const incGrowth = s.income_trend && s.income_trend.length>=2
-    ? (s.income_trend.at(-1)[1]-s.income_trend[0][1])/s.income_trend[0][1]*100 : 0;
-  const popGrowth = s.trend && s.trend.length>=2
-    ? (s.trend.at(-1)[1]-s.trend[0][1])/s.trend[0][1]*100 : 0;
+  if(!s) return 0;
+  const safe=(n)=>isFinite(n)&&!isNaN(n)?n:0;
+  const incGrowth = (s.income_trend&&s.income_trend.length>=2&&s.income_trend[0][1])
+    ? safe((s.income_trend.at(-1)[1]-s.income_trend[0][1])/s.income_trend[0][1]*100) : 0;
+  const popGrowth = (s.trend&&s.trend.length>=2&&s.trend[0][1])
+    ? safe((s.trend.at(-1)[1]-s.trend[0][1])/s.trend[0][1]*100) : 0;
   const a = s.amenities||{};
   const transit = Math.min(20, (a.rail_stations||0)*2);  // max 20pts for transit
   const incomeScore = s.income_median ? Math.min(20, (s.income_median-2000)/300) : 0;
@@ -896,12 +900,14 @@ function showProject(proj){
     : `<div class="prop-photo-placeholder">📷 Add Google Maps API key to enable property photos</div>`;
 
   // Find district this project is in (by state match, rough)
-  const districtData = DATA.features.find(f=>f.properties.stats.state===proj.state)?.properties?.stats;
+  const districtData = DATA.features
+    .filter(f=>f.properties.stats.state===proj.state&&f.properties.stats.income_median)
+    .sort((a,b)=>b.properties.stats.total-a.properties.stats.total)[0]?.properties?.stats||null;
   const score = districtData ? investScore(districtData) : null;
 
   document.getElementById("panel").innerHTML=`
     <div class="prop-header" style="background:${headerBg}">
-      <button class="back" onclick="location.reload()">✕ Close</button>
+      <button class="back" onclick="document.getElementById('panel').innerHTML='<div class=\"panel-handle\" id=\"panelHandle\"></div><div class=\"panel-peek\" id=\"panelPeek\">Browse districts</div><div class=\"empty\">Click a district to explore its data.</div>'">✕ Close</button>
       <span class="prop-status" style="background:${bg};color:${fg}">${proj.status}</span>
       <div class="prop-name">${proj.name||"Unnamed Project"}</div>
       <div class="prop-dev">${proj.developer?.name||""}</div>
@@ -923,6 +929,7 @@ function showProject(proj){
     </div>`:""}
     ${proj.developer?.address?`<div class="field" style="margin-top:12px"><b>Address</b>${proj.developer.address}</div>`:""}
     ${proj.lat&&proj.lon?`<button class="cmp-btn" style="margin-top:16px" onclick="map.setView([${proj.lat},${proj.lon}],15)">📍 Show on map</button>`:""}
+    ${(function(){var sim=(TEDUH.projects||[]).filter(function(p){return p.status===proj.status&&p.state===proj.state&&p.name!==proj.name;}).slice(0,4);if(!sim.length)return"";return"<h3>Similar Projects in "+proj.state+"</h3><div class=\"proj-list\">"+sim.map(function(p){return"<div class=\"proj-item\" style=\"padding:8px 0\"><div class=\"proj-name\">"+p.name+"</div><div class=\"proj-meta\">"+(p.developer?.name||"")+"</div>"+(p.expected_completion?"<div class=\"proj-meta\">CCC: "+p.expected_completion+"</div>":"")+"</div>";}).join("")+"</div>";})()}
     ${buildNearby(proj)}`;
 
   const h=document.getElementById("panelHandle");
@@ -1000,11 +1007,12 @@ function renderDistrict(f){
         </div>
       </div>
       <div class="score-factors">
-        <div class="sf"><div class="n">${s.income_median?'RM '+s.income_median.toLocaleString():'-'}</div><div class="l">Median income</div></div>
+        <div class="sf"><div class="n" style="font-size:13px">${s.income_median?'RM '+s.income_median.toLocaleString():'-'}</div><div class="l">Median income</div></div>
+        <div class="sf"><div class="n">${(s.poverty_absolute||0).toFixed(1)}%</div><div class="l">Poverty rate</div></div>
         <div class="sf"><div class="n">${(s.amenities?.rail_stations||0)}</div><div class="l">Rail stations</div></div>
-        <div class="sf"><div class="n">${(s.amenities?.school_points?.length||s.amenities?.schools||0)}</div><div class="l">Schools</div></div>
-        <div class="sf"><div class="n">${(s.amenities?.hospital_points?.length||s.amenities?.hospitals||0)}</div><div class="l">Hospitals</div></div>
-      </div>`;
+        <div class="sf"><div class="n">${(DISTRICT_PROJECTS[s.state]||[]).filter(p=>p.status==="Lancar").length}</div><div class="l">Active projects</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px">${s.income_median?(s.income_median>6590?"Above":"Below")+" national median (RM 6,590)":""}</div>`;
     })()}
     <div class="big">${fmt(s.total)}<small>residents</small></div>
     <div class="row">
@@ -1028,12 +1036,10 @@ function renderDistrict(f){
     </div>
     <h3>What's Nearby</h3>
     <div class="score-factors">
-      <div class="sf"><div class="n">${am.rail_stations||0}</div><div class="l">🚆 Rail stations</div></div>
-      <div class="sf"><div class="n">${am.malls||0}</div><div class="l">🛍 Shopping malls</div></div>
+      <div class="sf"><div class="n">${am.rail_stations||0}</div><div class="l">🚆 Rail</div></div>
+      <div class="sf"><div class="n">${am.malls||0}</div><div class="l">🛍 Malls</div></div>
       <div class="sf"><div class="n">${am.schools||0}</div><div class="l">🎓 Schools</div></div>
       <div class="sf"><div class="n">${am.hospitals||0}</div><div class="l">🏥 Hospitals</div></div>
-      <div class="sf"><div class="n">${am.supermarkets||0}</div><div class="l">🛒 Supermarkets</div></div>
-      <div class="sf"><div class="n">${(am.mall_points?.length||am.malls||0)+(am.school_points?.length||am.schools||0)}</div><div class="l">📍 Total venues</div></div>
     </div>
     ${am.rail_names?.length ? `<div style="font-size:12px;color:var(--muted);margin:8px 0 2px"><b>Stations: </b>${am.rail_names.slice(0,5).join(", ")}</div>` : ""}
     ${am.mall_names?.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px"><b>Malls: </b>${am.mall_names.slice(0,4).join(", ")}</div>` : ""}
