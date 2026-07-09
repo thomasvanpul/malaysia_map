@@ -77,3 +77,4 @@ don't bypass it.
   Toggling the chip while zoomed out shows a "zoom in" hint rather than the dots.
 - **Singapore transit leaks** into the Overpass bounding box and is filtered out
   by name-pattern and a minimum-latitude check during the transit build.
+
