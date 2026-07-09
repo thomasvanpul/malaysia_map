@@ -127,7 +127,7 @@ const color = p => RAMP[BREAKS.filter(b=>p>b).length];
 document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
-const map = L.map("map",{scrollWheelZoom:true, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, zoomDelta:0.5, wheelPxPerZoomLevel:40});
+const map = L.map("map",{scrollWheelZoom:true, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, zoomDelta:1, wheelPxPerZoomLevel:30});
 L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
   {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:6, updateWhenIdle:false}).addTo(map);
 
@@ -249,7 +249,7 @@ let selected=null, compareMode=false, compareFirst=null;
 const stateLayers = {};
 
 const layer = L.geoJSON(DATA,{
-  style: f => ({fillColor:color(f.properties.stats.total), fillOpacity:.75, stroke:false}),
+  style: f => ({fillColor:color(f.properties.stats.total), fillOpacity:.7, stroke:false}),
   onEachFeature:(f,l)=>{
     const st = f.properties.stats.state;
     (stateLayers[st] = stateLayers[st] || []).push(l);
@@ -288,7 +288,7 @@ function onClick(f,l){
   }
   if(selected) layer.resetStyle(selected);
   selected=l;
-  l.setStyle({stroke:true,weight:3.5,color:"#1a2b2e"});
+  l.setStyle({stroke:true,weight:3,color:"#e0a422",fillOpacity:0.45});
   map.fitBounds(l.getBounds().pad(0.15), {maxZoom:13});
   renderDistrict(f);
 }
