@@ -129,22 +129,36 @@ document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length
 
 const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, zoomDelta:0.1, wheelPxPerZoomLevel:30, bounceAtZoomLimits:false});
 
-// Smooth trackpad zoom: accumulate delta, apply instantly (no animation queuing)
+// Smooth trackpad zoom toward cursor position
 (function(){
   let target = null;
   let frame = null;
-  map.getContainer().addEventListener("wheel", function(e){
+  let cursorLatLng = null;
+  const container = map.getContainer();
+  container.addEventListener("wheel", function(e){
     e.preventDefault();
     const delta = -e.deltaY * (e.deltaMode === 1 ? 0.08 : e.deltaMode === 2 ? 1 : 0.008);
+    // capture cursor position in map coordinates before zooming
+    const rect = container.getBoundingClientRect();
+    const point = L.point(e.clientX - rect.left, e.clientY - rect.top);
+    cursorLatLng = map.containerPointToLatLng(point);
     if(target === null) target = map.getZoom();
     target = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), target + delta));
     if(frame) cancelAnimationFrame(frame);
     frame = requestAnimationFrame(function(){
+      // zoom toward cursor: after setZoom, pan so cursorLatLng stays under cursor
       map.setZoom(target, {animate:false});
+      if(cursorLatLng){
+        const newPoint = map.latLngToContainerPoint(cursorLatLng);
+        const offset = point.subtract(newPoint);
+        if(offset.distanceTo(L.point(0,0)) > 0.5){
+          map.panBy(offset.multiplyBy(-1), {animate:false});
+        }
+      }
       frame = null;
     });
   }, {passive:false});
-  map.on("zoomend", function(){ target = null; });
+  map.on("zoomend", function(){ target = null; cursorLatLng = null; });
 })();
 L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
   {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:6, updateWhenIdle:false}).addTo(map);
