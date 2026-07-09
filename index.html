@@ -197,6 +197,27 @@
   .chip.projects{border-width:2px;font-weight:600}
   .chip.projects .dot{width:10px;height:10px}
   @media(max-width:760px){.search-wrap input{width:140px}.search-wrap input:focus{width:180px}}
+
+  /* Property detail panel */
+  .prop-header{background:var(--teal-5);color:#fff;margin:-20px -20px 16px;padding:20px;position:relative}
+  .prop-header .back{position:absolute;top:14px;right:14px;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif}
+  .prop-header .back:hover{background:rgba(255,255,255,.35)}
+  .prop-status{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em}
+  .prop-name{font-family:'Archivo',sans-serif;font-weight:800;font-size:22px;line-height:1.2;margin-bottom:4px}
+  .prop-dev{font-size:13px;opacity:.85}
+  .prop-photo{width:100%;height:160px;object-fit:cover;border-radius:8px;margin-bottom:14px;background:#e3ded4;display:block}
+  .prop-photo-placeholder{width:100%;height:120px;background:linear-gradient(135deg,var(--teal-1),var(--teal-2));border-radius:8px;margin-bottom:14px;display:flex;align-items:center;justify-content:center;color:var(--teal-5);font-size:12px;font-weight:600}
+  .prop-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .prop-cell{background:var(--paper);border-radius:8px;padding:10px 12px}
+  .prop-cell .val{font-family:'Archivo',sans-serif;font-weight:700;font-size:16px;color:var(--ink)}
+  .prop-cell .lbl{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:2px}
+  .prop-contact{border-top:1px solid var(--line);padding-top:14px;margin-top:4px}
+  .prop-contact .clink{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink);text-decoration:none}
+  .prop-contact .clink:last-child{border-bottom:none}
+  .prop-contact .clink span{color:var(--muted);font-size:11px;display:block}
+
+  /* Small amenity icons at high zoom */
+  .mini-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 </style>
 </head>
 <body>
@@ -356,21 +377,37 @@ const PROJECT_STATUS_COLORS = {
   if(proj.developer?.name) tip += `<br>${proj.developer.name}`;
   if(proj.expected_completion) tip += `<br>Expected: ${proj.expected_completion}`;
   m.bindTooltip(tip, {sticky:true});
-  m.bindPopup(`<div class="amen-pop"><div class="body">
-    <div class="name">${proj.name || "Project"}</div>
-    <div class="kind">${proj.status} &middot; ${proj.state}</div>
-    ${proj.developer?.name ? `<div class="field"><b>Developer</b>${proj.developer.name}</div>` : ""}
-    ${proj.developer?.phone ? `<div class="field"><b>Phone</b>${proj.developer.phone}</div>` : ""}
-    ${proj.developer?.email ? `<div class="field"><b>Email</b>${proj.developer.email}</div>` : ""}
-    ${proj.expected_completion ? `<div class="field"><b>Expected CCC</b>${proj.expected_completion}</div>` : ""}
-    ${proj.bumi_quota_pct ? `<div class="field"><b>Bumi quota</b>${proj.bumi_quota_pct}%</div>` : ""}
-  </div></div>`, {maxWidth:280, minWidth:220});
+  m.on("click", ()=>showProject(proj));
   amenityLayers.projects.addLayer(m);
 });
 // Zoom-based visibility: supermarkets only render at zoom >= 12 to prevent
 // 3000-dot pile-up. When user has the "sup" chip on but is zoomed out, show
 // a zoom hint instead of the dots.
 const ZOOM_HIDE = {sup: 12};
+// High-zoom amenity icons (malls, schools, hospitals) — appear at zoom 13+
+const amenityIconLayers = {
+  malls: L.layerGroup(),
+  schools_icons: L.layerGroup(),
+  hospitals_icons: L.layerGroup(),
+};
+(function(){
+  const mkSmall=(emoji,col)=>L.divIcon({className:"",iconSize:[22,22],iconAnchor:[11,11],
+    html:`<div class="mini-icon" style="background:${col}">${emoji}</div>`});
+  DATA.features.forEach(f=>{
+    const a=f.properties.stats.amenities||{};
+    (a.mall_points||[]).forEach(p=>{if(p.lat&&p.name){const m=L.marker([p.lat,p.lon],{icon:mkSmall("🛍","#a94e2c")});m.bindTooltip(p.name);amenityIconLayers.malls.addLayer(m);}});
+    (a.school_points||[]).slice(0,200).forEach(p=>{if(p.lat&&p.name){const m=L.marker([p.lat,p.lon],{icon:mkSmall("🎓","#0369a1")});m.bindTooltip(p.name);amenityIconLayers.schools_icons.addLayer(m);}});
+    (a.hospital_points||[]).forEach(p=>{if(p.lat&&p.name){const m=L.marker([p.lat,p.lon],{icon:mkSmall("🏥","#be123c")});m.bindTooltip(p.name);amenityIconLayers.hospitals_icons.addLayer(m);}});
+  });
+})();
+map.on("zoomend",function(){
+  const z=map.getZoom();
+  Object.values(amenityIconLayers).forEach(lg=>{
+    if(z>=13&&!map.hasLayer(lg)) lg.addTo(map);
+    else if(z<13&&map.hasLayer(lg)) map.removeLayer(lg);
+  });
+});
+
 function applyZoomVisibility(){
   const z = map.getZoom();
   Object.entries(ZOOM_HIDE).forEach(([k, minZ]) => {
@@ -418,7 +455,8 @@ let prevHL=null;
   routePolylines[route.name]=polys;
 });
 
-// Stations integrated into transit layer — colored by their nearest line
+// Stations: build but DON'T add to map — only show when line is clicked
+const lineStationMarkers={};
 (function(){
   const mkI=(col,sz)=>L.divIcon({className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],
     html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`});
@@ -430,7 +468,7 @@ let prevHL=null;
       const m=L.marker([p.lat,p.lon],{icon:mkI(col,12)});
       const ln=route?route.name:"Rail station";
       const ref=route?.ref?"("+route.ref+")":"";
-      m.bindTooltip(`<b>${p.name||"Station"}</b><br><span style="color:${col}">● </span>${ln} ${ref}`,{sticky:true});
+      m.bindTooltip(`<b>${p.name||"Station"}</b><br><span style="color:${col}">●</span> ${ln} ${ref}`,{sticky:true});
       m.bindPopup(`<div class="amen-pop"><div class="body">
         <div class="name">${p.name||"Station"}</div>
         <div class="kind">Rail Station &middot; ${f.properties.shapeName}</div>
@@ -439,18 +477,23 @@ let prevHL=null;
           <b>${ln} ${ref}</b>
         </div>
       </div></div>`,{maxWidth:260});
-      amenityLayers.transit.addLayer(m);
+      if(!lineStationMarkers[ln]) lineStationMarkers[ln]=[];
+      lineStationMarkers[ln].push(m);
     });
   });
 })();
 
 function selectRoute(route,color){
+  // Hide previous line's stations
+  if(prevHL && lineStationMarkers[prevHL]) lineStationMarkers[prevHL].forEach(m=>map.removeLayer(m));
   // Highlight selected line, dim others
   if(prevHL)Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
   Object.entries(routePolylines).forEach(([n,ps])=>
     ps.forEach(l=>l.setStyle(n===route.name?{weight:7,opacity:1}:{opacity:0.15,weight:3}))
   );
   prevHL=route.name;
+  // Show this line's stations
+  if(lineStationMarkers[route.name]) lineStationMarkers[route.name].forEach(m=>m.addTo(map));
   // Collect stations on this line
   const sts=new Set();
   DATA.features.forEach(f=>{
@@ -477,7 +520,7 @@ function selectRoute(route,color){
           <span style="font-size:13px">${s}</span>
         </div></div>`).join("")}
     </div>
-    <button class="cmp-btn" style="margin-top:16px" onclick="Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));prevHL=null;">Reset all lines</button>`;
+    <button class="cmp-btn" style="margin-top:16px" onclick="if(prevHL&&lineStationMarkers[prevHL])lineStationMarkers[prevHL].forEach(m=>map.removeLayer(m));Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));prevHL=null;">Reset all lines</button>`;
   const h=document.getElementById("panelHandle");
   if(h)h.addEventListener("click",()=>document.getElementById("panel").classList.toggle("open"));
 }
@@ -761,6 +804,52 @@ function statusClass(s){
   if(s==="Lewat") return "status-lewat";
   if(s==="Sakit") return "status-sakit";
   return "status-belum";
+}
+
+const GOOGLE_SV_KEY = ""; // Add your Google Maps API key here for Street View photos
+
+function showProject(proj){
+  openPanel();
+  const statusColors = {Lancar:"#dcfce7|#166534", Lewat:"#fef3c7|#92400e", Sakit:"#fee2e2|#991b1b", "Belum Mula":"#f3f4f6|#4b5563"};
+  const [bg,fg] = (statusColors[proj.status]||"#f3f4f6|#4b5563").split("|");
+  const headerBg = {Lancar:"var(--teal-5)", Lewat:"#b45309", Sakit:"#991b1b", "Belum Mula":"#374151"}[proj.status]||"var(--teal-5)";
+
+  // Street View photo if API key + coordinates available
+  const photoHTML = (GOOGLE_SV_KEY && proj.lat && proj.lon)
+    ? `<img class="prop-photo" src="https://maps.googleapis.com/maps/api/streetview?size=640x320&location=${proj.lat},${proj.lon}&fov=90&key=${GOOGLE_SV_KEY}" alt="Street view" onerror="this.outerHTML='<div class=prop-photo-placeholder>📷 Photo not available for this location</div>'">`
+    : `<div class="prop-photo-placeholder">📷 Add Google Maps API key to enable property photos</div>`;
+
+  // Find district this project is in (by state match, rough)
+  const districtData = DATA.features.find(f=>f.properties.stats.state===proj.state)?.properties?.stats;
+  const score = districtData ? investScore(districtData) : null;
+
+  document.getElementById("panel").innerHTML=`
+    <div class="prop-header" style="background:${headerBg}">
+      <button class="back" onclick="location.reload()">✕ Close</button>
+      <span class="prop-status" style="background:${bg};color:${fg}">${proj.status}</span>
+      <div class="prop-name">${proj.name||"Unnamed Project"}</div>
+      <div class="prop-dev">${proj.developer?.name||""}</div>
+    </div>
+    ${photoHTML}
+    <div class="prop-grid">
+      ${proj.expected_completion?`<div class="prop-cell"><div class="val">${proj.expected_completion}</div><div class="lbl">Expected CCC</div></div>`:""}
+      ${proj.bumi_quota_pct?`<div class="prop-cell"><div class="val">${proj.bumi_quota_pct}%</div><div class="lbl">Bumi quota</div></div>`:""}
+      <div class="prop-cell"><div class="val">${proj.state||"—"}</div><div class="lbl">State</div></div>
+      ${score!==null?`<div class="prop-cell"><div class="val" style="color:${scoreColor(score)}">${score}/100</div><div class="lbl">Area investment score</div></div>`:""}
+    </div>
+    ${(proj.developer?.phone||proj.developer?.email||proj.developer?.website)?`
+    <div class="prop-contact">
+      <h3 style="margin-top:0">Developer Contact</h3>
+      ${proj.developer?.phone?`<a class="clink" href="tel:${proj.developer.phone}"><span>📞 Phone</span>${proj.developer.phone}</a>`:""}
+      ${proj.developer?.phone2?`<a class="clink" href="tel:${proj.developer.phone2}"><span>📞 Phone 2</span>${proj.developer.phone2}</a>`:""}
+      ${proj.developer?.email?`<a class="clink" href="mailto:${proj.developer.email}"><span>✉️ Email</span>${proj.developer.email}</a>`:""}
+      ${proj.developer?.website?`<a class="clink" href="${proj.developer.website}" target="_blank"><span>🌐 Website</span>${proj.developer.website.replace(/^https?:\/\//,"")}</a>`:""}
+    </div>`:""}
+    ${proj.developer?.address?`<div class="field" style="margin-top:12px"><b>Address</b>${proj.developer.address}</div>`:""}
+    ${proj.lat&&proj.lon?`<button class="cmp-btn" style="margin-top:16px" onclick="map.setView([${proj.lat},${proj.lon}],15)">📍 Show on map</button>`:""}`;
+
+  const h=document.getElementById("panelHandle");
+  if(h)h.addEventListener("click",()=>document.getElementById("panel").classList.toggle("open"));
 }
 
 function buildProjectList(state){
