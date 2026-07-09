@@ -55,7 +55,50 @@
   .leaflet-container{font-family:'IBM Plex Sans',sans-serif}
   .leaflet-interactive:focus{outline:none}
   .leaflet-interactive:focus-visible{outline:2px solid var(--amber)}
-  @media(max-width:760px){.wrap{flex-direction:column}aside{width:100%;max-height:50vh;border-left:none;border-top:1px solid var(--line)}}
+  @media(max-width:760px){
+    body{overflow:hidden}
+    header{padding:10px 14px;flex-wrap:nowrap;gap:8px}
+    header h1{font-size:15px}
+    .layers{gap:4px}
+    .chip{font-size:11px;padding:5px 8px;gap:4px}
+    .chip .dot{width:6px;height:6px}
+    select{font-size:12px;padding:5px 8px}
+    header .src{display:none}
+    .wrap{flex-direction:column;position:relative}
+    #map{flex:1;height:100%}
+    aside{
+      position:fixed;bottom:0;left:0;right:0;
+      width:100%;max-height:80vh;
+      border-left:none;border-top:none;
+      border-radius:16px 16px 0 0;
+      box-shadow:0 -4px 24px rgba(0,0,0,.15);
+      transform:translateY(calc(100% - 60px));
+      transition:transform .3s cubic-bezier(.32,.72,0,1);
+      z-index:2000;overflow-y:auto;
+      padding:0 20px 20px;
+    }
+    aside.open{transform:translateY(0)}
+    .panel-handle{
+      display:flex;justify-content:center;align-items:center;
+      height:24px;cursor:pointer;
+      position:sticky;top:0;background:var(--panel);z-index:1;
+      margin:0 -20px 8px;border-radius:16px 16px 0 0;
+      border-bottom:1px solid var(--line);
+    }
+    .panel-handle::before{
+      content:'';display:block;width:36px;height:4px;
+      background:var(--line);border-radius:2px;
+    }
+    .panel-peek{
+      display:flex;align-items:center;gap:10px;
+      padding:10px 0 6px;min-height:36px;
+      font-size:14px;font-weight:600;color:var(--ink);
+    }
+  }
+  @media(min-width:761px){
+    .panel-handle{display:none}
+    .panel-peek{display:none}
+  }
 
   .layers{display:flex;gap:6px}
   .chip{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:6px 10px;border:1.5px solid var(--line);border-radius:20px;background:var(--paper);color:var(--muted);cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px}
@@ -66,6 +109,7 @@
   .chip.mall.on{background:#a94e2c;border-color:#a94e2c}
   .chip.sup.on{background:#5f6f24;border-color:#5f6f24}
   .chip.transit.on{background:#333;border-color:#333}
+  .chip.projects.on{background:#7c3aed;border-color:#7c3aed}
   .amen-pop{font-family:'IBM Plex Sans',sans-serif;max-width:260px}
   .amen-pop img{width:100%;height:140px;object-fit:cover;border-radius:6px 6px 0 0;display:block;background:#eee}
   .amen-pop .body{padding:10px 12px 12px}
@@ -93,6 +137,7 @@
       <span class="chip mall" data-layer="mall"><span class="dot"></span>Malls</span>
       <span class="chip sup" data-layer="sup"><span class="dot"></span>Supermarkets</span>
       <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit lines</span>
+      <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
     </div>
     <select id="stateSel"><option value="">All states</option></select>
     <div class="src">DOSM 2024/25 &middot; OSM amenities + transit &middot; geoBoundaries</div>
@@ -103,6 +148,8 @@
     <div class="legend"><b>Population (quintiles)</b><div class="grad"></div><div class="ends"><span id="lg-min"></span><span id="lg-max"></span></div><div class="note">Each shade = 20% of districts</div></div>
   </div>
   <aside id="panel">
+    <div class="panel-handle" id="panelHandle"></div>
+    <div class="panel-peek" id="panelPeek">Click a district to explore</div>
     <div class="empty"><b>Click a district</b> to see its population, breakdown by sex and ethnicity, and growth since 2020.<br><br>Use the <b>state dropdown</b> to zoom to a state, and <b>Compare</b> to put any two districts side by side &mdash; even across states.</div>
   </aside>
 </div>
@@ -113,6 +160,10 @@ const DATA = await (await fetch('data.json')).json();
 let TRANSIT = {routes:[]};
 try { TRANSIT = await (await fetch('transit.json')).json(); }
 catch(e) { console.warn('transit.json missing, skipping transit layer'); }
+
+let TEDUH = {projects:[]};
+try { TEDUH = await (await fetch('teduh_projects.json')).json(); }
+catch(e) { console.warn('teduh_projects.json missing, skipping projects layer'); }
 
 const ETH_LABELS = {bumi_malay:"Malay", bumi_other:"Other Bumiputera", chinese:"Chinese", indian:"Indian", other_citizen:"Other citizens", other_noncitizen:"Non-citizens"};
 const fmt = v => v>=1000 ? (v/1000).toFixed(2)+"M" : Math.round(v)+"k";
@@ -164,7 +215,35 @@ const amenityLayers = {
   mall: L.layerGroup(),
   sup:  L.layerGroup(),
   transit: L.layerGroup(),
+  projects: L.layerGroup(),
 };
+// Project status colours
+const PROJECT_STATUS_COLORS = {
+  "Lancar":"#00a651", "Belum Mula":"#aaa", "Lewat":"#f59e0b",
+  "Sakit":"#ef4444", "Siap Dengan CCC":"#2e7364", "Siap Dengan CFO":"#2e7364",
+  "Permit Dibatalkan":"#111",
+};
+(TEDUH.projects || []).forEach(proj => {
+  if(!proj.lat || !proj.lon) return;
+  const color = PROJECT_STATUS_COLORS[proj.status] || "#999";
+  const m = L.circleMarker([proj.lat, proj.lon], {
+    radius:5, color:"#fff", weight:1.5, fillColor:color, fillOpacity:0.9
+  });
+  let tip = `<b>${proj.name}</b><br>${proj.status}`;
+  if(proj.developer?.name) tip += `<br>${proj.developer.name}`;
+  if(proj.expected_completion) tip += `<br>Expected: ${proj.expected_completion}`;
+  m.bindTooltip(tip, {sticky:true});
+  m.bindPopup(`<div class="amen-pop"><div class="body">
+    <div class="name">${proj.name || "Project"}</div>
+    <div class="kind">${proj.status} &middot; ${proj.state}</div>
+    ${proj.developer?.name ? `<div class="field"><b>Developer</b>${proj.developer.name}</div>` : ""}
+    ${proj.developer?.phone ? `<div class="field"><b>Phone</b>${proj.developer.phone}</div>` : ""}
+    ${proj.developer?.email ? `<div class="field"><b>Email</b>${proj.developer.email}</div>` : ""}
+    ${proj.expected_completion ? `<div class="field"><b>Expected CCC</b>${proj.expected_completion}</div>` : ""}
+    ${proj.bumi_quota_pct ? `<div class="field"><b>Bumi quota</b>${proj.bumi_quota_pct}%</div>` : ""}
+  </div></div>`, {maxWidth:280, minWidth:220});
+  amenityLayers.projects.addLayer(m);
+});
 // Zoom-based visibility: supermarkets only render at zoom >= 12 to prevent
 // 3000-dot pile-up. When user has the "sup" chip on but is zoomed out, show
 // a zoom hint instead of the dots.
@@ -290,6 +369,15 @@ const borderLayer = L.geoJSON(DATA, {
 // Keep borders below markers but above fills — set a custom pane
 borderLayer.bringToFront();
 
+// Mobile bottom sheet: tap handle to toggle, auto-open on district click
+const panel = document.getElementById("panel");
+const handle = document.getElementById("panelHandle");
+const peek = document.getElementById("panelPeek");
+function openPanel(){ panel.classList.add("open"); }
+function closePanel(){ panel.classList.remove("open"); }
+function setPeek(text){ if(peek) peek.textContent = text; }
+if(handle) handle.addEventListener("click", ()=> panel.classList.toggle("open"));
+
 // state dropdown
 const sel = document.getElementById("stateSel");
 Object.keys(stateLayers).sort().forEach(st=>{
@@ -331,6 +419,8 @@ function trendSVG(trend){
 
 function renderDistrict(f){
   const s=f.properties.stats, name=f.properties.shapeName;
+  openPanel();
+  setPeek(name + " · " + fmt(s.total) + " residents");
   const am=s.amenities||{rail_stations:0,malls:0,supermarkets:0,rail_names:[],mall_names:[]};
   const growth=((s.trend.at(-1)[1]/s.trend[0][1]-1)*100).toFixed(1);
   const eth=Object.entries(s.ethnicity).sort((a,b)=>b[1]-a[1]);
