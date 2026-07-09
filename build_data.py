@@ -147,10 +147,14 @@ def main():
                     "supermarkets":  len(a.get("supermarkets", [])),
                     "rail_names":    [x["name"] for x in a.get("rail_stations", []) if x.get("name")][:12],
                     "mall_names":    [x["name"] for x in a.get("malls", []) if x.get("name")][:8],
+                    "schools":       len(a.get("schools", [])),
+                    "hospitals":     len(a.get("hospitals", [])),
                     # full coord arrays for map markers
                     "rail_points":        a.get("rail_stations", []),
                     "mall_points":        a.get("malls", []),
                     "supermarket_points": a.get("supermarkets", []),
+                    "school_points":      a.get("schools", []),
+                    "hospital_points":    a.get("hospitals", []),
                 }
         print("amenities merged.")
     except FileNotFoundError:

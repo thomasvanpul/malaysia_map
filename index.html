@@ -112,6 +112,8 @@
   .chip.sup.on{background:#5f6f24;border-color:#5f6f24}
   .chip.transit.on{background:#333;border-color:#333}
   .chip.projects.on{background:#7c3aed;border-color:#7c3aed}
+  .chip.schools.on{background:#0369a1;border-color:#0369a1}
+  .chip.hospitals.on{background:#be123c;border-color:#be123c}
   .amen-pop{font-family:'IBM Plex Sans',sans-serif;max-width:260px}
   .amen-pop img{width:100%;height:140px;object-fit:cover;border-radius:6px 6px 0 0;display:block;background:#eee}
   .amen-pop .body{padding:10px 12px 12px}
@@ -141,6 +143,29 @@
   .status-sakit{background:#fee2e2;color:#991b1b}
   .status-belum{background:#f3f4f6;color:#4b5563}
   .proj-count{font-size:12px;color:var(--muted);margin:12px 0 6px}
+
+  .score-bar{display:flex;align-items:center;gap:10px;margin:14px 0}
+  .score-ring{width:56px;height:56px;flex-shrink:0;position:relative}
+  .score-ring svg{transform:rotate(-90deg)}
+  .score-ring .val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:17px}
+  .score-label{flex:1}
+  .score-label b{font-family:'Archivo',sans-serif;font-size:14px;display:block}
+  .score-label small{font-size:11px;color:var(--muted)}
+  .score-factors{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+  .sf{background:var(--paper);border-radius:6px;padding:8px 10px}
+  .sf .n{font-family:'Archivo',sans-serif;font-weight:700;font-size:15px}
+  .sf .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+  .calc-wrap{background:var(--paper);border-radius:8px;padding:14px;margin-top:6px}
+  .calc-wrap h4{font-family:'Archivo',sans-serif;font-size:13px;font-weight:700;margin-bottom:10px}
+  .calc-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
+  .calc-row label{font-size:12px;color:var(--muted);flex:1}
+  .calc-row input{width:110px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;text-align:right;background:#fff}
+  .calc-result{background:var(--teal-5);color:#fff;border-radius:6px;padding:10px 12px;margin-top:8px;text-align:center}
+  .calc-result .monthly{font-family:'Archivo',sans-serif;font-size:22px;font-weight:800}
+  .calc-result .label{font-size:11px;opacity:.8}
+  .proj-filter{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
+  .proj-filter button{font-size:11px;padding:4px 8px;border:1px solid var(--line);border-radius:10px;background:var(--paper);cursor:pointer;color:var(--muted)}
+  .proj-filter button.active{background:var(--teal-5);color:#fff;border-color:var(--teal-5)}
 </style>
 </head>
 <body>
@@ -153,6 +178,8 @@
       <span class="chip sup" data-layer="sup"><span class="dot"></span>Supermarkets</span>
       <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit lines</span>
       <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
+      <span class="chip schools" data-layer="schools"><span class="dot"></span>Schools</span>
+      <span class="chip hospitals" data-layer="hospitals"><span class="dot"></span>Hospitals</span>
     </div>
     <select id="stateSel"><option value="">All states</option></select>
     <div class="src">DOSM 2024/25 &middot; OSM amenities + transit &middot; geoBoundaries</div>
@@ -232,7 +259,36 @@ const amenityLayers = {
   sup:  L.layerGroup(),
   transit: L.layerGroup(),
   projects: L.markerClusterGroup({maxClusterRadius:50, disableClusteringAtZoom:13, chunkedLoading:true}),
+  schools: L.layerGroup(),
+  hospitals: L.layerGroup(),
 };
+// Populate schools + hospitals
+(function(){
+  const COLORS2 = {schools:"#0369a1", hospitals:"#be123c"};
+  const CATS = {schools:"school_points", hospitals:"hospital_points"};
+  ["schools","hospitals"].forEach(kind => {
+    const col = COLORS2[kind];
+    const icon = makeDot(col, 4);
+    DATA.features.forEach(f => {
+      const a = f.properties.stats.amenities;
+      if(!a) return;
+      const pts = a[CATS[kind]] || [];
+      pts.forEach(p => {
+        if(!p.lat||!p.lon) return;
+        const m = L.marker([p.lat,p.lon],{icon,keyboard:false});
+        if(p.name) m.bindTooltip(p.name);
+        m.bindPopup(`<div class="amen-pop"><div class="body">
+          <div class="name">${p.name||"Unnamed"}</div>
+          <div class="kind">${p.type||kind} &middot; ${f.properties.shapeName}</div>
+          ${p.phone?`<div class="field"><b>Phone</b>${p.phone}</div>`:""}
+          ${p.website?`<div class="field"><b>Website</b><a href="${p.website}" target="_blank">${p.website.replace(/^https?:\/\//,"")}</a></div>`:""}
+        </div></div>`,{maxWidth:260});
+        amenityLayers[kind].addLayer(m);
+      });
+    });
+  });
+})();
+
 // Build district -> projects index for panel list
 const DISTRICT_PROJECTS = {};
 (TEDUH.projects || []).forEach(proj => {
@@ -443,6 +499,73 @@ function trendSVG(trend){
     <path d="${area}" fill="#d7e8e3"/><path d="${path}" fill="none" stroke="#2e7364" stroke-width="2"/>${dots}${labels}</svg>`;
 }
 
+function investScore(s){
+  // Score 0-100 combining: income growth, population growth, transit, project health, income level
+  const incGrowth = s.income_trend && s.income_trend.length>=2
+    ? (s.income_trend.at(-1)[1]-s.income_trend[0][1])/s.income_trend[0][1]*100 : 0;
+  const popGrowth = s.trend && s.trend.length>=2
+    ? (s.trend.at(-1)[1]-s.trend[0][1])/s.trend[0][1]*100 : 0;
+  const a = s.amenities||{};
+  const transit = Math.min(20, (a.rail_stations||0)*2);  // max 20pts for transit
+  const incomeScore = s.income_median ? Math.min(20, (s.income_median-2000)/300) : 0;
+  const growthScore = Math.min(20, Math.max(0, (incGrowth+popGrowth)*2));
+  const projectHealth = (() => {
+    const st = (DISTRICT_PROJECTS[s.state]||[]);
+    if(!st.length) return 10;
+    const troubled = st.filter(p=>p.status==="Sakit"||p.status==="Permit Dibatalkan").length;
+    const ratio = troubled/st.length;
+    return Math.round(20*(1-ratio));
+  })();
+  const malls = Math.min(10, (a.malls||0)/2);
+  const schools = Math.min(10, (a.school_points||a.schools||0)/5);
+  return Math.min(100, Math.round(transit+incomeScore+growthScore+projectHealth+malls+schools));
+}
+
+function scoreColor(n){
+  if(n>=75) return "#00a651";
+  if(n>=55) return "#f59e0b";
+  if(n>=35) return "#f97316";
+  return "#ef4444";
+}
+
+function scoreRing(score){
+  const r=22, circ=2*Math.PI*r, dash=circ*score/100;
+  const col=scoreColor(score);
+  return `<div class="score-ring">
+    <svg width="56" height="56" viewBox="0 0 56 56">
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="#e3ded4" stroke-width="5"/>
+      <circle cx="28" cy="28" r="${r}" fill="none" stroke="${col}" stroke-width="5"
+        stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+    </svg>
+    <div class="val" style="color:${col}">${score}</div>
+  </div>`;
+}
+
+function mortgageCalc(price){
+  if(!price) price=500000;
+  return `<div class="calc-wrap">
+    <h4>Mortgage Calculator</h4>
+    <div class="calc-row"><label>Property price (RM)</label><input id="mc-price" type="number" value="${price}" step="10000"></div>
+    <div class="calc-row"><label>Down payment (%)</label><input id="mc-dp" type="number" value="10" min="0" max="90"></div>
+    <div class="calc-row"><label>Interest rate (%)</label><input id="mc-rate" type="number" value="4.0" step="0.1"></div>
+    <div class="calc-row"><label>Loan term (years)</label><input id="mc-term" type="number" value="30" min="5" max="35"></div>
+    <div class="calc-result" id="mc-result"></div>
+  </div>`;
+}
+
+function calcMortgage(){
+  const P = parseFloat(document.getElementById("mc-price")?.value||0);
+  const dp = parseFloat(document.getElementById("mc-dp")?.value||10)/100;
+  const r = parseFloat(document.getElementById("mc-rate")?.value||4)/100/12;
+  const n = parseInt(document.getElementById("mc-term")?.value||30)*12;
+  const loan = P*(1-dp);
+  const monthly = r===0 ? loan/n : loan*r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1);
+  const total = monthly*n;
+  const res = document.getElementById("mc-result");
+  if(res) res.innerHTML=`<div class="monthly">RM ${Math.round(monthly).toLocaleString()}/mo</div>
+    <div class="label">Loan: RM ${Math.round(loan).toLocaleString()} · Total paid: RM ${Math.round(total).toLocaleString()}</div>`;
+}
+
 function statusClass(s){
   if(s==="Lancar") return "status-lancar";
   if(s==="Lewat") return "status-lewat";
@@ -459,14 +582,17 @@ function buildProjectList(state){
     });
   if(!projs.length) return "";
   const items = projs.slice(0,20).map(p => `
-    <div class="proj-item">
+    <div class="proj-item" data-status="${p.status}">
       <div class="proj-name">${p.name || "Unnamed Project"}</div>
       <div class="proj-meta">${p.developer?.name || ""}</div>
       <div class="proj-meta">${p.expected_completion ? "Expected CCC: "+p.expected_completion : ""}</div>
       <span class="proj-status ${statusClass(p.status)}">${p.status}</span>
     </div>`).join("");
   const more = projs.length > 20 ? `<div class="proj-count">Showing 20 of ${projs.length} projects</div>` : "";
+  const statuses = [...new Set(projs.map(p=>p.status))].sort();
+  const filterBtns = statuses.map(s=>`<button class="proj-filter-btn ${s==="Lancar"?"active":""}" data-status="${s}">${s}</button>`).join("");
   return `<h3>Housing Projects (${projs.length})</h3>
+    <div class="proj-filter" id="projFilter">${filterBtns}</div>
     <div class="proj-count">Source: TEDUH / KPKT · Active, delayed & troubled only</div>
     <div class="proj-list">${items}</div>${more}`;
 }
@@ -474,6 +600,28 @@ function buildProjectList(state){
 function renderDistrict(f){
   const s=f.properties.stats, name=f.properties.shapeName;
   openPanel();
+  // Wire mortgage calculator after panel renders
+  setTimeout(()=>{
+    // Wire project status filter
+    document.querySelectorAll(".proj-filter-btn").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const st = btn.dataset.status;
+        btn.classList.toggle("active");
+        document.querySelectorAll(".proj-item").forEach(el=>{
+          const elSt = el.dataset.status;
+          const anyActive = [...document.querySelectorAll(".proj-filter-btn.active")].length > 0;
+          if(!anyActive){el.style.display=""; return;}
+          const activeStatuses = [...document.querySelectorAll(".proj-filter-btn.active")].map(b=>b.dataset.status);
+          el.style.display = activeStatuses.includes(elSt) ? "" : "none";
+        });
+      });
+    });
+    ["mc-price","mc-dp","mc-rate","mc-term"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener("input",calcMortgage);
+    });
+    calcMortgage();
+  },50);
   setPeek(name + " · " + fmt(s.total) + " residents");
   const am=s.amenities||{rail_stations:0,malls:0,supermarkets:0,rail_names:[],mall_names:[]};
   const growth=((s.trend.at(-1)[1]/s.trend[0][1]-1)*100).toFixed(1);
@@ -486,6 +634,22 @@ function renderDistrict(f){
   document.getElementById("panel").innerHTML=`
     <div class="dname">${name}</div>
     <div class="dsub">${s.state} &middot; 2025 estimates</div>
+    ${(()=>{
+      const sc=investScore(s);
+      return `<div class="score-bar">
+        ${scoreRing(sc)}
+        <div class="score-label">
+          <b>Investment Score: ${sc}/100</b>
+          <small>Based on income growth, transit, population trend & project health</small>
+        </div>
+      </div>
+      <div class="score-factors">
+        <div class="sf"><div class="n">${s.income_median?'RM '+s.income_median.toLocaleString():'-'}</div><div class="l">Median income</div></div>
+        <div class="sf"><div class="n">${(s.amenities?.rail_stations||0)}</div><div class="l">Rail stations</div></div>
+        <div class="sf"><div class="n">${(s.amenities?.school_points?.length||s.amenities?.schools||0)}</div><div class="l">Schools</div></div>
+        <div class="sf"><div class="n">${(s.amenities?.hospital_points?.length||s.amenities?.hospitals||0)}</div><div class="l">Hospitals</div></div>
+      </div>`;
+    })()}
     <div class="big">${fmt(s.total)}<small>residents</small></div>
     <div class="row">
       <div><b>${fmt(s.male)}</b><span>Male</span></div>
@@ -514,8 +678,12 @@ function renderDistrict(f){
     </div>
     ${am.mall_names.length ? `<div style="font-size:12px;color:var(--muted);margin:-6px 0 4px">Malls incl. ${am.mall_names.slice(0,4).join(", ")}</div>` : ""}
     ${am.rail_names.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Stations incl. ${am.rail_names.slice(0,4).join(", ")}</div>` : ""}
+    ${am.school_points?.length ? `<div class="field" style="margin-top:6px"><b>Schools</b>${am.school_points.length} within district</div>` : ""}
+    ${am.hospital_points?.length ? `<div class="field"><b>Hospitals & Clinics</b>${am.hospital_points.length} within district</div>` : ""}
     <h3>Ethnicity</h3>
     ${ethHtml}
+    <h3>Mortgage Calculator</h3>
+    ${mortgageCalc(null)}
     <button class="cmp-btn" id="cmpBtn">Compare with another district</button>
     <div class="cmp-note" id="cmpNote">Now click a second district on the map</div>
     ${buildProjectList(f.properties.stats.state)}`;
@@ -539,6 +707,8 @@ function renderCompare(fa,fb){
     ["Mean income", rm(a.income_mean), rm(b.income_mean), a.income_mean>b.income_mean],
     ["Poverty (absolute)", a.poverty_absolute+"%", b.poverty_absolute+"%", a.poverty_absolute<b.poverty_absolute],
     ["Rail stations", A.rail_stations, B.rail_stations, A.rail_stations>B.rail_stations],
+    ["Schools", (A.school_points?.length||A.schools||0), (B.school_points?.length||B.schools||0), (A.school_points?.length||A.schools||0)>(B.school_points?.length||B.schools||0)],
+    ["Hospitals", (A.hospital_points?.length||A.hospitals||0), (B.hospital_points?.length||B.hospitals||0), (A.hospital_points?.length||A.hospitals||0)>(B.hospital_points?.length||B.hospitals||0)],
     ["Malls", A.malls, B.malls, A.malls>B.malls],
     ["Supermarkets", A.supermarkets, B.supermarkets, A.supermarkets>B.supermarkets],
   ].map(r=>`<tr><td>${r[0]}</td><td class="${r[3]?'win':''}">${r[1]}</td><td class="${!r[3]?'win':''}">${r[2]}</td></tr>`).join("");
