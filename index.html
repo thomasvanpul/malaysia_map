@@ -127,7 +127,28 @@ const color = p => RAMP[BREAKS.filter(b=>p>b).length];
 document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
-const map = L.map("map",{scrollWheelZoom:true, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, zoomDelta:1, wheelPxPerZoomLevel:30, bounceAtZoomLimits:false});
+const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, bounceAtZoomLimits:false});
+
+// Zoom toward cursor — clean version, no pan correction
+(function(){
+  const c = map.getContainer();
+  let raf = null;
+  let nextZoom = null;
+  let nextPoint = null;
+  c.addEventListener("wheel", function(e){
+    e.preventDefault();
+    const rect = c.getBoundingClientRect();
+    nextPoint = L.point(e.clientX - rect.left, e.clientY - rect.top);
+    const delta = -e.deltaY * (e.deltaMode === 1 ? 0.1 : e.deltaMode === 2 ? 1 : 0.01);
+    nextZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), (nextZoom !== null ? nextZoom : map.getZoom()) + delta));
+    if(raf) return;
+    raf = requestAnimationFrame(function(){
+      map.setZoomAround(nextPoint, nextZoom, {animate:false});
+      nextZoom = null;
+      raf = null;
+    });
+  }, {passive:false});
+})();
 L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
   {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:6, updateWhenIdle:false}).addTo(map);
 
