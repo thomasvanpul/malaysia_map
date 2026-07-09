@@ -209,7 +209,6 @@
     <div class="search-results" id="searchResults"></div>
   </div>
   <div class="layers">
-      <span class="chip rail" data-layer="rail"><span class="dot"></span>Rail</span>
       <span class="chip mall" data-layer="mall"><span class="dot"></span>Malls</span>
       <span class="chip sup" data-layer="sup"><span class="dot"></span>Supermarkets</span>
       <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit lines</span>
@@ -386,22 +385,106 @@ function applyZoomVisibility(){
   });
   if (typeof updateSupHint === "function") updateSupHint();
 }
-// Populate transit lines
-(TRANSIT.routes || []).forEach(route => {
-  const color = route.color || "#666";
-  (route.chains || []).forEach(chain => {
-    if (chain.length < 2) return;
-    const latlngs = chain.map(([lon, lat]) => [lat, lon]);
-    // Thin, precise, single stroke — Apple/Google Maps style
-    // White casing underneath for separation from base map
-    L.polyline(latlngs, {color:"#ffffff", weight:7, opacity:0.85, lineCap:"round", lineJoin:"round", interactive:false})
-      .addTo(amenityLayers.transit);
-    // Colored route line on top
-    L.polyline(latlngs, {color, weight:4, opacity:1, lineCap:"round", lineJoin:"round"})
-      .bindTooltip(`<b>${route.name}</b>${route.ref ? " ("+route.ref+")" : ""}`, {sticky:true})
-      .addTo(amenityLayers.transit);
+// ── Integrated Transit: lines + stations, interactive ──────────────────────
+function ptSegDist(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy;
+  if(!l)return Math.hypot(px-ax,py-ay);
+  const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l));
+  return Math.hypot(px-ax-t*dx,py-ay-t*dy);
+}
+function nearestRoute(lat,lon){
+  let best=null,bestD=Infinity;
+  (TRANSIT.routes||[]).forEach(r=>{(r.chains||[]).forEach(c=>{
+    for(let i=0;i<c.length-1;i++){
+      const d=ptSegDist(lon,lat,c[i][0],c[i][1],c[i+1][0],c[i+1][1]);
+      if(d<bestD){bestD=d;best=r;}
+    }
+  });});
+  return bestD<0.04?best:null;
+}
+const routePolylines={};
+let prevHL=null;
+
+(TRANSIT.routes||[]).forEach(route=>{
+  const color=route.color||"#666";
+  const polys=[];
+  (route.chains||[]).forEach(chain=>{
+    if(chain.length<2)return;
+    const ll=chain.map(([lon,lat])=>[lat,lon]);
+    // White casing for separation from basemap
+    amenityLayers.transit.addLayer(L.polyline(ll,{color:"#fff",weight:8,opacity:0.9,lineCap:"round",lineJoin:"round",interactive:false}));
+    const line=L.polyline(ll,{color,weight:4.5,opacity:1,lineCap:"round",lineJoin:"round"});
+    line.bindTooltip(`<b style="color:${color}">${route.name}</b>${route.ref?" ("+route.ref+")":""}`,{sticky:true});
+    line.on("click",()=>selectRoute(route,color));
+    amenityLayers.transit.addLayer(line);
+    polys.push(line);
   });
+  routePolylines[route.name]=polys;
 });
+
+// Stations integrated into transit layer — colored by their nearest line
+(function(){
+  const mkI=(col,sz)=>L.divIcon({className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],
+    html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`});
+  DATA.features.forEach(f=>{
+    (f.properties.stats.amenities?.rail_points||[]).forEach(p=>{
+      if(!p.lat||!p.lon)return;
+      const route=nearestRoute(p.lat,p.lon);
+      const col=route?route.color:"#555";
+      const m=L.marker([p.lat,p.lon],{icon:mkI(col,12)});
+      const ln=route?route.name:"Rail station";
+      const ref=route?.ref?"("+route.ref+")":"";
+      m.bindTooltip(`<b>${p.name||"Station"}</b><br><span style="color:${col}">● </span>${ln} ${ref}`,{sticky:true});
+      m.bindPopup(`<div class="amen-pop"><div class="body">
+        <div class="name">${p.name||"Station"}</div>
+        <div class="kind">Rail Station &middot; ${f.properties.shapeName}</div>
+        <div class="field" style="margin-top:8px">
+          <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${col};vertical-align:middle;margin-right:6px"></span>
+          <b>${ln} ${ref}</b>
+        </div>
+      </div></div>`,{maxWidth:260});
+      amenityLayers.transit.addLayer(m);
+    });
+  });
+})();
+
+function selectRoute(route,color){
+  // Highlight selected line, dim others
+  if(prevHL)Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
+  Object.entries(routePolylines).forEach(([n,ps])=>
+    ps.forEach(l=>l.setStyle(n===route.name?{weight:7,opacity:1}:{opacity:0.15,weight:3}))
+  );
+  prevHL=route.name;
+  // Collect stations on this line
+  const sts=new Set();
+  DATA.features.forEach(f=>{
+    (f.properties.stats.amenities?.rail_points||[]).forEach(p=>{
+      if(p.name&&nearestRoute(p.lat,p.lon)?.name===route.name)sts.add(p.name);
+    });
+  });
+  openPanel();
+  document.getElementById("panel").innerHTML=`
+    <div class="panel-handle" id="panelHandle"></div>
+    <div class="panel-peek" id="panelPeek">${route.name}</div>
+    <div style="display:flex;align-items:center;gap:12px;margin:16px 0 8px">
+      <div style="width:44px;height:44px;border-radius:10px;background:${color};flex-shrink:0"></div>
+      <div>
+        <div class="dname" style="font-size:20px">${route.name}</div>
+        <div class="dsub">${route.ref?route.ref+" &middot;":""} ${route.kind} &middot; ${sts.size} stations</div>
+      </div>
+    </div>
+    <h3>Stations (${sts.size})</h3>
+    <div class="proj-list">
+      ${[...sts].map(s=>`<div class="proj-item">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+          <span style="font-size:13px">${s}</span>
+        </div></div>`).join("")}
+    </div>
+    <button class="cmp-btn" style="margin-top:16px" onclick="Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));prevHL=null;">Reset all lines</button>`;
+  const h=document.getElementById("panelHandle");
+  if(h)h.addEventListener("click",()=>document.getElementById("panel").classList.toggle("open"));
+}
 function collectPoints(kind){
   const pts=[];
   DATA.features.forEach(f=>{
