@@ -479,7 +479,7 @@ let prevHL=null;
     amenityLayers.transit.addLayer(L.polyline(ll,{color:"#fff",weight:8,opacity:0.9,lineCap:"round",lineJoin:"round",interactive:false}));
     const line=L.polyline(ll,{color,weight:4.5,opacity:1,lineCap:"round",lineJoin:"round"});
     line.bindTooltip(`<b style="color:${color}">${route.name}</b>${route.ref?" ("+route.ref+")":""}`,{sticky:true});
-    line.on("click",()=>selectRoute(route,color));
+    line.on("click",function(e){L.DomEvent.stopPropagation(e);selectRoute(route,color);});
     amenityLayers.transit.addLayer(line);
     polys.push(line);
   });
@@ -618,18 +618,37 @@ document.querySelectorAll(".chip").forEach(chip=>{
   chip.onclick = ()=>{
     const k = chip.dataset.layer;
     const on = chip.classList.toggle("on");
-    if (on) {
+    if(on){
       const minZ = ZOOM_HIDE[k];
-      if (!(minZ && map.getZoom() < minZ)) amenityLayers[k].addTo(map);
+      if(!(minZ && map.getZoom() < minZ)) amenityLayers[k].addTo(map);
     } else {
       map.removeLayer(amenityLayers[k]);
+      if(k==="transit"){
+        ALL_STATION_MARKERS.forEach(m=>map.removeLayer(m));
+        Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
+        prevHL=null;
+      }
     }
-    if (k === "sup") updateSupHint();
+    if(k==="sup") updateSupHint();
   };
 });
 // Default view: transit lines + malls on
 const transitChip = document.querySelector('.chip[data-layer="transit"]');
 if(transitChip){ transitChip.classList.add("on"); amenityLayers.transit.addTo(map); }
+
+// Click empty map → reset transit highlights + panel
+map.on("click", function(){
+  if(!prevHL) return;
+  ALL_STATION_MARKERS.forEach(m=>map.removeLayer(m));
+  Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
+  prevHL=null;
+  const panel=document.getElementById("panel");
+  if(panel&&panel.querySelector(".cmp-btn")&&panel.innerHTML.includes("Reset all lines")){
+    panel.innerHTML='<div class="panel-handle" id="panelHandle"></div><div class="panel-peek" id="panelPeek">Browse districts</div><div class="empty">Click a district to explore, or click a transit line to see its stations.</div>';
+    const h=document.getElementById("panelHandle");
+    if(h)h.addEventListener("click",()=>panel.classList.toggle("open"));
+  }
+});
 map.on("zoomend", applyZoomVisibility);
 applyZoomVisibility();
 
