@@ -384,29 +384,46 @@ const PROJECT_STATUS_COLORS = {
 // 3000-dot pile-up. When user has the "sup" chip on but is zoomed out, show
 // a zoom hint instead of the dots.
 const ZOOM_HIDE = {sup: 12};
-// High-zoom amenity icons (malls, schools, hospitals) — appear at zoom 13+
+// High-zoom amenity circles — canvas rendered (no DOM, no lag), viewport-limited
 const amenityIconLayers = {
   malls: L.layerGroup(),
   schools_icons: L.layerGroup(),
   hospitals_icons: L.layerGroup(),
 };
+// Pre-build all points (circleMarker is canvas, not DOM — fast)
 (function(){
-  const mkSmall=(emoji,col)=>L.divIcon({className:"",iconSize:[22,22],iconAnchor:[11,11],
-    html:`<div class="mini-icon" style="background:${col}">${emoji}</div>`});
+  const CATS = [
+    ["mall_points",     "#a94e2c", 6, "Malls",     "malls"],
+    ["school_points",   "#0369a1", 4, "Schools",   "schools_icons"],
+    ["hospital_points", "#be123c", 5, "Hospitals", "hospitals_icons"],
+  ];
   DATA.features.forEach(f=>{
     const a=f.properties.stats.amenities||{};
-    (a.mall_points||[]).forEach(p=>{if(p.lat&&p.name){const m=L.marker([p.lat,p.lon],{icon:mkSmall("🛍","#a94e2c")});m.bindTooltip(p.name);amenityIconLayers.malls.addLayer(m);}});
-    (a.school_points||[]).slice(0,200).forEach(p=>{if(p.lat&&p.name){const m=L.marker([p.lat,p.lon],{icon:mkSmall("🎓","#0369a1")});m.bindTooltip(p.name);amenityIconLayers.schools_icons.addLayer(m);}});
-    (a.hospital_points||[]).forEach(p=>{if(p.lat&&p.name){const m=L.marker([p.lat,p.lon],{icon:mkSmall("🏥","#be123c")});m.bindTooltip(p.name);amenityIconLayers.hospitals_icons.addLayer(m);}});
+    CATS.forEach(([key,col,r,label,layer])=>{
+      (a[key]||[]).forEach(p=>{
+        if(!p.lat||!p.lon) return;
+        const m=L.circleMarker([p.lat,p.lon],{
+          radius:r, color:"#fff", weight:1.5, fillColor:col, fillOpacity:0.9,
+          bubblingMouseEvents:false,
+        });
+        if(p.name) m.bindTooltip(`${p.name}`,{sticky:true});
+        amenityIconLayers[layer].addLayer(m);
+      });
+    });
   });
 })();
-map.on("zoomend",function(){
+let amenityZoomActive = false;
+function updateAmenityZoom(){
   const z=map.getZoom();
-  Object.values(amenityIconLayers).forEach(lg=>{
-    if(z>=13&&!map.hasLayer(lg)) lg.addTo(map);
-    else if(z<13&&map.hasLayer(lg)) map.removeLayer(lg);
-  });
-});
+  if(z>=13 && !amenityZoomActive){
+    Object.values(amenityIconLayers).forEach(lg=>lg.addTo(map));
+    amenityZoomActive=true;
+  } else if(z<13 && amenityZoomActive){
+    Object.values(amenityIconLayers).forEach(lg=>map.removeLayer(lg));
+    amenityZoomActive=false;
+  }
+}
+map.on("zoomend", updateAmenityZoom);
 
 function applyZoomVisibility(){
   const z = map.getZoom();
@@ -455,20 +472,24 @@ let prevHL=null;
   routePolylines[route.name]=polys;
 });
 
-// Stations: build but DON'T add to map — only show when line is clicked
+// Stations: always visible as small circleMarkers on transit layer
+// Clicking a line enlarges + labels only that line's stations
 const lineStationMarkers={};
+const ALL_STATION_MARKERS=[];
 (function(){
-  const mkI=(col,sz)=>L.divIcon({className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],
-    html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>`});
   DATA.features.forEach(f=>{
     (f.properties.stats.amenities?.rail_points||[]).forEach(p=>{
-      if(!p.lat||!p.lon)return;
+      if(!p.lat||!p.lon) return;
       const route=nearestRoute(p.lat,p.lon);
       const col=route?route.color:"#555";
-      const m=L.marker([p.lat,p.lon],{icon:mkI(col,12)});
       const ln=route?route.name:"Rail station";
       const ref=route?.ref?"("+route.ref+")":"";
-      m.bindTooltip(`<b>${p.name||"Station"}</b><br><span style="color:${col}">●</span> ${ln} ${ref}`,{sticky:true});
+      // Small dot always visible on transit layer
+      const m=L.circleMarker([p.lat,p.lon],{
+        radius:5, color:"#fff", weight:2, fillColor:col, fillOpacity:1,
+        _routeName:ln, _stationName:p.name, _col:col, _ref:ref,
+      });
+      if(p.name) m.bindTooltip(`<b>${p.name}</b><br><span style="color:${col}">●</span> ${ln} ${ref}`,{sticky:true});
       m.bindPopup(`<div class="amen-pop"><div class="body">
         <div class="name">${p.name||"Station"}</div>
         <div class="kind">Rail Station &middot; ${f.properties.shapeName}</div>
@@ -477,6 +498,8 @@ const lineStationMarkers={};
           <b>${ln} ${ref}</b>
         </div>
       </div></div>`,{maxWidth:260});
+      amenityLayers.transit.addLayer(m);
+      ALL_STATION_MARKERS.push(m);
       if(!lineStationMarkers[ln]) lineStationMarkers[ln]=[];
       lineStationMarkers[ln].push(m);
     });
@@ -484,16 +507,16 @@ const lineStationMarkers={};
 })();
 
 function selectRoute(route,color){
-  // Hide previous line's stations
-  if(prevHL && lineStationMarkers[prevHL]) lineStationMarkers[prevHL].forEach(m=>map.removeLayer(m));
+  // Shrink previous line's stations back to small
+  if(prevHL && lineStationMarkers[prevHL]) lineStationMarkers[prevHL].forEach(m=>m.setStyle({radius:5,weight:2}));
   // Highlight selected line, dim others
   if(prevHL)Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
   Object.entries(routePolylines).forEach(([n,ps])=>
     ps.forEach(l=>l.setStyle(n===route.name?{weight:7,opacity:1}:{opacity:0.15,weight:3}))
   );
   prevHL=route.name;
-  // Show this line's stations
-  if(lineStationMarkers[route.name]) lineStationMarkers[route.name].forEach(m=>m.addTo(map));
+  // Enlarge this line's stations
+  if(lineStationMarkers[route.name]) lineStationMarkers[route.name].forEach(m=>m.setStyle({radius:8,weight:2.5}));
   // Collect stations on this line
   const sts=new Set();
   DATA.features.forEach(f=>{
@@ -520,7 +543,7 @@ function selectRoute(route,color){
           <span style="font-size:13px">${s}</span>
         </div></div>`).join("")}
     </div>
-    <button class="cmp-btn" style="margin-top:16px" onclick="if(prevHL&&lineStationMarkers[prevHL])lineStationMarkers[prevHL].forEach(m=>map.removeLayer(m));Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));prevHL=null;">Reset all lines</button>`;
+    <button class="cmp-btn" style="margin-top:16px" onclick="ALL_STATION_MARKERS.forEach(m=>m.setStyle({radius:5,weight:2}));Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));prevHL=null;">Reset all lines</button>`;
   const h=document.getElementById("panelHandle");
   if(h)h.addEventListener("click",()=>document.getElementById("panel").classList.toggle("open"));
 }
@@ -806,7 +829,50 @@ function statusClass(s){
   return "status-belum";
 }
 
+function buildNearby(proj){
+  if(!proj.lat||!proj.lon) return "";
+  var malls=[],stations=[],schools=[],hospitals=[];
+  DATA.features.forEach(function(f){
+    var a=f.properties.stats.amenities||{};
+    (a.mall_points||[]).forEach(function(p){malls.push(p);});
+    (a.rail_points||[]).forEach(function(p){stations.push(p);});
+    (a.school_points||[]).forEach(function(p){schools.push(p);});
+    (a.hospital_points||[]).forEach(function(p){hospitals.push(p);});
+  });
+  function rowHTML(items,emoji){
+    return items.map(function(p){
+      return '<div class="proj-item" style="padding:6px 0"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px">'+emoji+' '+p.name+'</span><span style="font-size:11px;color:var(--muted);background:var(--paper);padding:2px 6px;border-radius:8px">'+fmtDist(p.km)+'</span></div></div>';
+    }).join("");
+  }
+  var nm=nearbyItems(proj.lat,proj.lon,malls,3,5);
+  var ns=nearbyItems(proj.lat,proj.lon,stations,3,3);
+  var nsc=nearbyItems(proj.lat,proj.lon,schools,2,3);
+  var nh=nearbyItems(proj.lat,proj.lon,hospitals,2,5);
+  if(!nm.length&&!ns.length&&!nsc.length&&!nh.length) return "";
+  return "<h3>Nearby</h3><div class=\"proj-list\" style=\"margin-top:4px\">"
+    +(ns.length?rowHTML(ns,"🚆"):"")
+    +(nm.length?rowHTML(nm,"🛍"):"")
+    +(nsc.length?rowHTML(nsc,"🎓"):"")
+    +(nh.length?rowHTML(nh,"🏥"):"")
+    +"</div>";
+}
+
 const GOOGLE_SV_KEY = "AIzaSyCYA2qvGMJ0_EDbfxd15KPOQkGdrodzxrU";
+
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=6371, dL=((lat2-lat1)*Math.PI/180), dO=((lon2-lon1)*Math.PI/180);
+  const a=Math.sin(dL/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function nearbyItems(lat,lon,points,maxN,maxKm){
+  return points
+    .filter(p=>p.lat&&p.lon&&p.name)
+    .map(p=>({...p,km:haversineKm(lat,lon,p.lat,p.lon)}))
+    .filter(p=>p.km<=maxKm)
+    .sort((a,b)=>a.km-b.km)
+    .slice(0,maxN);
+}
+function fmtDist(km){return km<1?(km*1000).toFixed(0)+"m":(km).toFixed(1)+"km";}
 
 function showProject(proj){
   openPanel();
@@ -846,7 +912,8 @@ function showProject(proj){
       ${proj.developer?.website?`<a class="clink" href="${proj.developer.website}" target="_blank"><span>🌐 Website</span>${proj.developer.website.replace(/^https?:\/\//,"")}</a>`:""}
     </div>`:""}
     ${proj.developer?.address?`<div class="field" style="margin-top:12px"><b>Address</b>${proj.developer.address}</div>`:""}
-    ${proj.lat&&proj.lon?`<button class="cmp-btn" style="margin-top:16px" onclick="map.setView([${proj.lat},${proj.lon}],15)">📍 Show on map</button>`:""}`;
+    ${proj.lat&&proj.lon?`<button class="cmp-btn" style="margin-top:16px" onclick="map.setView([${proj.lat},${proj.lon}],15)">📍 Show on map</button>`:""}
+    ${buildNearby(proj)}`;
 
   const h=document.getElementById("panelHandle");
   if(h)h.addEventListener("click",()=>document.getElementById("panel").classList.toggle("open"));
