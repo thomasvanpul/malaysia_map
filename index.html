@@ -209,15 +209,11 @@
     <div class="search-results" id="searchResults"></div>
   </div>
   <div class="layers">
-      <span class="chip mall" data-layer="mall"><span class="dot"></span>Malls</span>
-      <span class="chip sup" data-layer="sup"><span class="dot"></span>Supermarkets</span>
       <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit lines</span>
       <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
-      <span class="chip schools" data-layer="schools"><span class="dot"></span>Schools</span>
-      <span class="chip hospitals" data-layer="hospitals"><span class="dot"></span>Hospitals</span>
     </div>
     <select id="stateSel"><option value="">All states</option></select>
-    <div class="src">DOSM 2024/25 &middot; OSM amenities + transit &middot; geoBoundaries</div>
+    <div class="src">DOSM 2024/25 &middot; OSM &middot; TEDUH KPKT</div>
   </div>
 </header>
 <div class="wrap">
@@ -553,10 +549,8 @@ document.querySelectorAll(".chip").forEach(chip=>{
   };
 });
 // Default view: transit lines + malls on
-["transit", "mall"].forEach(k => {
-  const chip = document.querySelector(`.chip[data-layer="${k}"]`);
-  if (chip) { chip.classList.add("on"); amenityLayers[k].addTo(map); }
-});
+const transitChip = document.querySelector('.chip[data-layer="transit"]');
+if(transitChip){ transitChip.classList.add("on"); amenityLayers.transit.addTo(map); }
 map.on("zoomend", applyZoomVisibility);
 applyZoomVisibility();
 
@@ -866,16 +860,17 @@ function renderDistrict(f){
       <div><b>${s.poverty_absolute}%</b><span>Absolute</span></div>
       <div><b>${s.poverty_relative}%</b><span>Relative</span></div>
     </div>
-    <h3>Amenities <span style="text-transform:none;letter-spacing:0">(OpenStreetMap)</span></h3>
-    <div class="row" style="margin-top:6px">
-      <div><b>${am.rail_stations}</b><span>Rail stations</span></div>
-      <div><b>${am.malls}</b><span>Malls</span></div>
-      <div><b>${am.supermarkets}</b><span>Supermarkets</span></div>
+    <h3>What's Nearby</h3>
+    <div class="score-factors">
+      <div class="sf"><div class="n">${am.rail_stations||0}</div><div class="l">🚆 Rail stations</div></div>
+      <div class="sf"><div class="n">${am.malls||0}</div><div class="l">🛍 Shopping malls</div></div>
+      <div class="sf"><div class="n">${am.schools||0}</div><div class="l">🎓 Schools</div></div>
+      <div class="sf"><div class="n">${am.hospitals||0}</div><div class="l">🏥 Hospitals</div></div>
+      <div class="sf"><div class="n">${am.supermarkets||0}</div><div class="l">🛒 Supermarkets</div></div>
+      <div class="sf"><div class="n">${(am.mall_points?.length||am.malls||0)+(am.school_points?.length||am.schools||0)}</div><div class="l">📍 Total venues</div></div>
     </div>
-    ${am.mall_names.length ? `<div style="font-size:12px;color:var(--muted);margin:-6px 0 4px">Malls incl. ${am.mall_names.slice(0,4).join(", ")}</div>` : ""}
-    ${am.rail_names.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px">Stations incl. ${am.rail_names.slice(0,4).join(", ")}</div>` : ""}
-    ${am.school_points?.length ? `<div class="field" style="margin-top:6px"><b>Schools</b>${am.school_points.length} within district</div>` : ""}
-    ${am.hospital_points?.length ? `<div class="field"><b>Hospitals & Clinics</b>${am.hospital_points.length} within district</div>` : ""}
+    ${am.rail_names?.length ? `<div style="font-size:12px;color:var(--muted);margin:8px 0 2px"><b>Stations: </b>${am.rail_names.slice(0,5).join(", ")}</div>` : ""}
+    ${am.mall_names?.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px"><b>Malls: </b>${am.mall_names.slice(0,4).join(", ")}</div>` : ""}
     <h3>Ethnicity</h3>
     ${ethHtml}
     <h3>Mortgage Calculator</h3>
@@ -902,11 +897,10 @@ function renderCompare(fa,fb){
     ["Median income", rm(a.income_median), rm(b.income_median), a.income_median>b.income_median],
     ["Mean income", rm(a.income_mean), rm(b.income_mean), a.income_mean>b.income_mean],
     ["Poverty (absolute)", a.poverty_absolute+"%", b.poverty_absolute+"%", a.poverty_absolute<b.poverty_absolute],
-    ["Rail stations", A.rail_stations, B.rail_stations, A.rail_stations>B.rail_stations],
-    ["Schools", (A.school_points?.length||A.schools||0), (B.school_points?.length||B.schools||0), (A.school_points?.length||A.schools||0)>(B.school_points?.length||B.schools||0)],
-    ["Hospitals", (A.hospital_points?.length||A.hospitals||0), (B.hospital_points?.length||B.hospitals||0), (A.hospital_points?.length||A.hospitals||0)>(B.hospital_points?.length||B.hospitals||0)],
-    ["Malls", A.malls, B.malls, A.malls>B.malls],
-    ["Supermarkets", A.supermarkets, B.supermarkets, A.supermarkets>B.supermarkets],
+    ["Rail stations", A.rail_stations||0, B.rail_stations||0, (A.rail_stations||0)>(B.rail_stations||0)],
+    ["Malls", A.malls||0, B.malls||0, (A.malls||0)>(B.malls||0)],
+    ["Schools", (A.schools||0), (B.schools||0), (A.schools||0)>(B.schools||0)],
+    ["Hospitals", (A.hospitals||0), (B.hospitals||0), (A.hospitals||0)>(B.hospitals||0)],
   ].map(r=>`<tr><td>${r[0]}</td><td class="${r[3]?'win':''}">${r[1]}</td><td class="${!r[3]?'win':''}">${r[2]}</td></tr>`).join("");
   document.getElementById("panel").innerHTML=`
     <div class="dname" style="font-size:20px">${fa.properties.shapeName} vs ${fb.properties.shapeName}</div>
