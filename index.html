@@ -166,13 +166,49 @@
   .proj-filter{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
   .proj-filter button{font-size:11px;padding:4px 8px;border:1px solid var(--line);border-radius:10px;background:var(--paper);cursor:pointer;color:var(--muted)}
   .proj-filter button.active{background:var(--teal-5);color:#fff;border-color:var(--teal-5)}
+
+  /* Property pin markers */
+  .proj-pin{width:28px;height:34px;position:relative;cursor:pointer}
+  .proj-pin-body{width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+    display:flex;align-items:center;justify-content:center;border:2px solid #fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .proj-pin-body svg{transform:rotate(45deg);display:block}
+  .proj-pin-tip{width:4px;height:6px;background:inherit;margin:0 auto;
+    clip-path:polygon(50% 100%,0 0,100% 0)}
+
+  /* Search box */
+  .search-wrap{position:relative}
+  .search-wrap input{font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:7px 12px 7px 32px;
+    border:1.5px solid var(--line);border-radius:20px;background:var(--paper);color:var(--ink);
+    width:200px;outline:none}
+  .search-wrap input:focus{border-color:var(--teal-4);width:260px;transition:width .2s}
+  .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+  .search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--panel);
+    border:1.5px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);
+    z-index:5000;overflow:hidden;max-height:280px;overflow-y:auto;display:none}
+  .search-results.open{display:block}
+  .sr-item{padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)}
+  .sr-item:last-child{border-bottom:none}
+  .sr-item:hover{background:var(--paper)}
+  .sr-item .sr-type{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);display:block}
+  .sr-item b{font-size:13px;display:block;margin-top:1px}
+  
+  /* Projects chip — make it stand out */
+  .chip.projects{border-width:2px;font-weight:600}
+  .chip.projects .dot{width:10px;height:10px}
+  @media(max-width:760px){.search-wrap input{width:140px}.search-wrap input:focus{width:180px}}
 </style>
 </head>
 <body>
 <header>
   <h1>West Malaysia <span>District Explorer</span></h1>
   <div class="right">
-    <div class="layers">
+    <div class="search-wrap">
+    <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="searchBox" type="text" placeholder="Search districts or projects…" autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+  <div class="layers">
       <span class="chip rail" data-layer="rail"><span class="dot"></span>Rail</span>
       <span class="chip mall" data-layer="mall"><span class="dot"></span>Malls</span>
       <span class="chip sup" data-layer="sup"><span class="dot"></span>Supermarkets</span>
@@ -308,9 +344,19 @@ const PROJECT_STATUS_COLORS = {
 (TEDUH.projects || []).forEach(proj => {
   if(!proj.lat || !proj.lon) return;
   const color = PROJECT_STATUS_COLORS[proj.status] || "#999";
-  const m = L.circleMarker([proj.lat, proj.lon], {
-    radius:5, color:"#fff", weight:1.5, fillColor:color, fillOpacity:0.9
+  const icon = L.divIcon({
+    className:"",
+    iconSize:[26,32], iconAnchor:[13,32],
+    html:`<div class="proj-pin">
+      <div class="proj-pin-body" style="background:${color}">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+          <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
+          <path d="M9 21V12h6v9" fill="white"/>
+        </svg>
+      </div>
+    </div>`
   });
+  const m = L.marker([proj.lat, proj.lon], {icon});
   let tip = `<b>${proj.name}</b><br>${proj.status}`;
   if(proj.developer?.name) tip += `<br>${proj.developer.name}`;
   if(proj.expected_completion) tip += `<br>Expected: ${proj.expected_completion}`;
@@ -347,8 +393,12 @@ function applyZoomVisibility(){
     if (chain.length < 2) return;
     const latlngs = chain.map(([lon, lat]) => [lat, lon]);
     // Thin, precise, single stroke — Apple/Google Maps style
-    L.polyline(latlngs, {color, weight:2.5, opacity:0.9, lineCap:"round", lineJoin:"round"})
-      .bindTooltip(route.name + (route.ref ? " (" + route.ref + ")" : ""), {sticky:true})
+    // White casing underneath for separation from base map
+    L.polyline(latlngs, {color:"#ffffff", weight:7, opacity:0.85, lineCap:"round", lineJoin:"round", interactive:false})
+      .addTo(amenityLayers.transit);
+    // Colored route line on top
+    L.polyline(latlngs, {color, weight:4, opacity:1, lineCap:"round", lineJoin:"round"})
+      .bindTooltip(`<b>${route.name}</b>${route.ref ? " ("+route.ref+")" : ""}`, {sticky:true})
       .addTo(amenityLayers.transit);
   });
 });
@@ -442,6 +492,69 @@ const layer = L.geoJSON(DATA,{
   }
 }).addTo(map);
 map.fitBounds(layer.getBounds().pad(0.03));
+
+// ── Search ──────────────────────────────────────────────────────────────
+(function(){
+  const box = document.getElementById("searchBox");
+  const res = document.getElementById("searchResults");
+  if(!box) return;
+
+  function buildIndex(){
+    const idx = [];
+    // Districts
+    DATA.features.forEach(f=>{
+      idx.push({type:"District", label:f.properties.shapeName,
+        sub:f.properties.stats.state, f, lyr:null});
+    });
+    // Amenity rail stations
+    DATA.features.forEach(f=>{
+      (f.properties.stats.amenities?.rail_points||[]).forEach(p=>{
+        if(p.name) idx.push({type:"Station", label:p.name,
+          sub:f.properties.shapeName, latlng:[p.lat,p.lon]});
+      });
+    });
+    // TEDUH projects
+    (TEDUH.projects||[]).forEach(p=>{
+      if(p.name) idx.push({type:"Project", label:p.name,
+        sub:(p.developer?.name||p.state||""), latlng:(p.lat&&p.lon?[p.lat,p.lon]:null)});
+    });
+    return idx;
+  }
+
+  let idx = null;
+  let districtLayerMap = {};
+  layer.eachLayer(l=>{
+    const n = l.feature?.properties?.shapeName;
+    if(n) districtLayerMap[n]=l;
+  });
+
+  box.addEventListener("focus", ()=>{ if(!idx) idx=buildIndex(); });
+  box.addEventListener("input", ()=>{
+    if(!idx) idx=buildIndex();
+    const q = box.value.trim().toLowerCase();
+    if(q.length < 2){ res.classList.remove("open"); return; }
+    const hits = idx.filter(item=>item.label.toLowerCase().includes(q)).slice(0,8);
+    if(!hits.length){ res.classList.remove("open"); return; }
+    res.innerHTML = hits.map((item,i)=>
+      `<div class="sr-item" data-i="${i}"><span class="sr-type">${item.type}</span><b>${item.label}</b><small style="color:var(--muted);font-size:11px">${item.sub}</small></div>`
+    ).join("");
+    res.classList.add("open");
+    res.querySelectorAll(".sr-item").forEach((el,i)=>{
+      el.addEventListener("click",()=>{
+        const item = hits[i];
+        res.classList.remove("open");
+        box.value = item.label;
+        if(item.type==="District"){
+          const l = districtLayerMap[item.label];
+          if(l){ map.fitBounds(l.getBounds().pad(0.1)); l.fire("click"); }
+        } else if(item.latlng){
+          map.setView(item.latlng, 14);
+        }
+      });
+    });
+  });
+  document.addEventListener("click", e=>{ if(!box.contains(e.target)&&!res.contains(e.target)) res.classList.remove("open"); });
+})();
 map.setMaxBounds(layer.getBounds().pad(0.5));
 
 // District borders as a single top layer so shared edges don't double-stroke
