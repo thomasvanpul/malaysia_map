@@ -276,7 +276,7 @@ const color = p => RAMP[BREAKS.filter(b=>p>b).length];
 document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
-const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, preferCanvas:true, maxBoundsViscosity:0.9, zoomSnap:0, bounceAtZoomLimits:false});
+const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0.9, zoomSnap:0, bounceAtZoomLimits:false});
 
 // Zoom toward cursor — clean version, no pan correction
 (function(){
@@ -418,7 +418,7 @@ const amenityIconLayers = {
         if(!p.lat||!p.lon) return;
         const m=L.circleMarker([p.lat,p.lon],{
           radius:r, color:"#fff", weight:1.5, fillColor:col, fillOpacity:0.9,
-          bubblingMouseEvents:false,
+          bubblingMouseEvents:false, renderer:L.canvas(),
         });
         if(p.name) m.bindTooltip(`${p.name}`,{sticky:true});
         amenityIconLayers[layer].addLayer(m);
@@ -476,8 +476,11 @@ let prevHL=null;
     if(chain.length<2)return;
     const ll=chain.map(([lon,lat])=>[lat,lon]);
     // White casing for separation from basemap
-    amenityLayers.transit.addLayer(L.polyline(ll,{color:"#fff",weight:8,opacity:0.9,lineCap:"round",lineJoin:"round",interactive:false}));
-    const line=L.polyline(ll,{color,weight:4.5,opacity:1,lineCap:"round",lineJoin:"round"});
+    const z0=map.getZoom();
+    const cw=z0<8?0:z0<11?3:6;
+    if(cw>0) amenityLayers.transit.addLayer(L.polyline(ll,{color:"#fff",weight:cw+3,opacity:0.85,lineCap:"round",lineJoin:"round",interactive:false}));
+    const lw=map.getZoom()<8?2:map.getZoom()<11?3:4.5;
+    const line=L.polyline(ll,{color,weight:lw,opacity:1,lineCap:"round",lineJoin:"round"});
     line.bindTooltip(`<b style="color:${color}">${route.name}</b>${route.ref?" ("+route.ref+")":""}`,{sticky:true});
     line.on("click",function(e){L.DomEvent.stopPropagation(e);selectRoute(route,color);});
     amenityLayers.transit.addLayer(line);
@@ -500,7 +503,7 @@ const ALL_STATION_MARKERS=[];
       const ref=route?.ref?"("+route.ref+")":"";
       // Small dot always visible on transit layer
       const m=L.circleMarker([p.lat,p.lon],{
-        radius:5, color:"#fff", weight:2, fillColor:col, fillOpacity:1,
+        radius:5, color:"#fff", weight:2, fillColor:col, fillOpacity:1, renderer:L.canvas(),
         _routeName:ln, _stationName:p.name, _col:col, _ref:ref,
       });
       if(p.name) m.bindTooltip(`<b>${p.name}</b><br><span style="color:${col}">●</span> ${ln} ${ref}`,{sticky:true});
@@ -806,7 +809,7 @@ function investScore(s){
     return Math.round(20*(1-ratio));
   })();
   const malls = Math.min(10, (a.malls||0)/2);
-  const schools = Math.min(10, (a.school_points||a.schools||0)/5);
+  const schools = Math.min(10, (a.school_points?.length||a.schools||0)/5);
   return Math.min(100, Math.round(transit+incomeScore+growthScore+projectHealth+malls+schools));
 }
 
