@@ -316,7 +316,8 @@ const amenityLayers = {
   projects: L.markerClusterGroup({
     maxClusterRadius: 80,
     disableClusteringAtZoom: 15,
-    chunkedLoading: true,
+    chunkedLoading: false,
+    animate: false,
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
     iconCreateFunction: function(cluster){
