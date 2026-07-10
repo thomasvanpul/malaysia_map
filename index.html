@@ -219,8 +219,7 @@
   /* Small amenity icons at high zoom */
   .mini-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 
-  .leaflet-marker-icon{animation:fadeM 0.25s ease forwards}
-  @keyframes fadeM{from{opacity:0;transform:scale(0.6)}to{opacity:1;transform:scale(1)}}
+  /* fade-in animation removed: its transform:scale() keyframes permanently overrode Leaflet's own translate3d positioning transform, causing all cluster/project markers to collapse to (0,0) */
 </style>
 </head>
 <body>
