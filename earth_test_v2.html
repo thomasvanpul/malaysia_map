@@ -9,32 +9,28 @@
   html, body { background:#04070c; overflow:hidden; height:100vh; width:100vw; }
   #three-canvas { position:fixed; inset:0; z-index:10; transition:opacity 1.4s cubic-bezier(.4,0,.2,1); }
   #map { position:fixed; inset:0; z-index:5; opacity:0; }
+  #wash {
+    position:fixed; inset:0; z-index:8; pointer-events:none;
+    background: radial-gradient(ellipse at center, rgba(247,245,240,0.9) 0%, rgba(247,245,240,0.55) 45%, rgba(247,245,240,0) 75%);
+    opacity:0;
+  }
   #info { position:fixed; top:10px; left:10px; color:#8f8; font-family:monospace; font-size:11px; z-index:100; }
 
   #explore-wrap {
-    position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+    position:fixed; bottom:64px; left:50%; transform:translateX(-50%);
     z-index:50; text-align:center;
-    transition:opacity 0.6s ease;
-  }
-  #explore-btn {
-    font-family:-apple-system,'Helvetica Neue',sans-serif;
-    font-size:15px; font-weight:600; letter-spacing:0.02em;
-    color:#fff; background:rgba(255,255,255,0.08);
-    border:1px solid rgba(255,255,255,0.25);
-    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-    padding:14px 34px; border-radius:100px;
+    transition:opacity 0.8s ease;
     cursor:pointer;
-    box-shadow:0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
-    transition:all 0.3s cubic-bezier(.4,0,.2,1);
-  }
-  #explore-btn:hover {
-    background:rgba(255,255,255,0.14);
-    transform:translateY(-2px);
-    box-shadow:0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
   }
   #scroll-hint {
-    margin-top:14px; font-family:-apple-system,sans-serif; font-size:12px;
-    color:rgba(255,255,255,0.4); letter-spacing:0.05em;
+    font-family:-apple-system,'Helvetica Neue',sans-serif; font-size:12px;
+    color:rgba(255,255,255,0.55); letter-spacing:0.15em; text-transform:uppercase;
+    font-weight:500;
+    animation: breathe 3.5s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.35; transform: translateY(0); }
+    50% { opacity: 0.85; transform: translateY(-3px); }
   }
   #title-wrap {
     position:fixed; top:14%; left:50%; transform:translateX(-50%);
@@ -60,9 +56,9 @@
 </div>
 <canvas id="three-canvas"></canvas>
 <div id="map"></div>
+<div id="wash"></div>
 <div id="explore-wrap">
-  <button id="explore-btn">Explore West Malaysia</button>
-  <div id="scroll-hint">or scroll to begin</div>
+  <div id="scroll-hint">Scroll to continue</div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -202,11 +198,17 @@ function initMap(){
   if(mapInited) return;
   mapInited = true;
   leafletMap = L.map('map', { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom:16 }).addTo(leafletMap);
+  L.tileLayer('https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE', { maxZoom:19 }).addTo(leafletMap);
   leafletMap.setView([MALAYSIA_LAT, MALAYSIA_LON], 7);
 }
 
-document.getElementById('explore-btn').addEventListener('click', startFlight);
+document.getElementById('explore-wrap').addEventListener('click', startFlight);
+// Touch support: swipe/scroll on mobile triggers flight too
+window.addEventListener('touchmove', ()=>{
+  if(scrollConsumed) return;
+  scrollConsumed = true;
+  startFlight();
+}, { passive:true });
 let scrollConsumed = false;
 window.addEventListener('wheel', (e)=>{
   if(scrollConsumed) return;
@@ -243,14 +245,26 @@ function animate(){
     cloudMat.opacity = 0.55 * (1-fadeT);
     atmosMat.opacity = 1 * (1-fadeT);
 
+    // Tonal wash blooms in earlier and lingers through the cut, unifying Earth's
+    // saturated colors with the map's warm cream palette before the crossfade lands
+    const washT = Math.max(0, Math.min(1, (flightT - 0.68) / 0.27));
+    document.getElementById('wash').style.opacity = String(washT * 0.9);
+
     if(flightT > 0.82){
       const crossT = (flightT - 0.82) / 0.18;
       canvasEl.style.opacity = String(1 - crossT);
       document.getElementById('map').style.opacity = String(crossT);
     }
+    if(flightT >= 1){
+      // Wash fades out once the map is fully present, revealing full map color
+      const settleT = Math.min(1, (flightT - 1) / 0.001 + 1); // instant clamp helper unused
+    }
 
     if(flightT >= 1){
       canvasEl.style.pointerEvents = 'none';
+      const wash = document.getElementById('wash');
+      wash.style.transition = 'opacity 1.1s ease';
+      wash.style.opacity = '0';
       if(leafletMap){
         leafletMap.dragging.enable();
         leafletMap.scrollWheelZoom.enable();
