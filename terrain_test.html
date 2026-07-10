@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Terrain Flyover Test</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; }
+  html, body { height:100%; background:#0a0d12; }
+  #map { position:fixed; inset:0; }
+  #info { position:fixed; top:10px; left:10px; color:#8f8; font-family:monospace; font-size:11px; z-index:100; white-space:pre; }
+  #error-log { position:fixed; top:40px; left:10px; color:#f66; font-family:monospace; font-size:11px; z-index:100; white-space:pre-wrap; max-width:90vw; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="info">loading...</div>
+<div id="error-log"></div>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+window.addEventListener('error', function(e){
+  document.getElementById('error-log').textContent += 'ERROR: ' + e.message + ' @ ' + e.filename + ':' + e.lineno + '\n';
+});
+
+const KEY = 'r1vaJcTInBX0Pvp3CevE';
+const info = document.getElementById('info');
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: `https://api.maptiler.com/maps/backdrop-dark/style.json?key=${KEY}`,
+  center: [101.7, 3.5],
+  zoom: 9,
+  pitch: 78,
+  bearing: -30,
+  maxPitch: 85,
+  antialias: true,
+});
+
+map.on('load', () => {
+  info.textContent = 'style loaded, adding terrain...';
+  try {
+    map.addSource('terrain-src', {
+      type: 'raster-dem',
+      url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${KEY}`,
+      tileSize: 256,
+    });
+    map.setTerrain({ source: 'terrain-src', exaggeration: 1.6 });
+    info.textContent = 'terrain enabled.';
+  } catch (e) {
+    info.textContent = 'terrain FAILED: ' + e.message;
+  }
+
+  map.setSky({
+    'sky-color': '#0a0d12',
+    'sky-horizon-blend': 0.5,
+    'horizon-color': '#1a2438',
+    'horizon-fog-blend': 0.6,
+    'fog-color': '#141b28',
+    'fog-ground-blend': 0.7,
+  });
+});
+
+map.on('error', (e) => {
+  info.textContent = 'MAP ERROR: ' + (e.error ? e.error.message : JSON.stringify(e));
+});
+
+window.__map = map;
+</script>
+</body>
+</html>
