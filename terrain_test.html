@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Terrain Flyover Test</title>
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
 <style>
   * { margin:0; padding:0; }
   html, body { height:100%; background:#0a0d12; }
@@ -16,7 +16,7 @@
 <div id="map"></div>
 <div id="info">loading...</div>
 <div id="error-log"></div>
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script>
 window.addEventListener('error', function(e){
   document.getElementById('error-log').textContent += 'ERROR: ' + e.message + ' @ ' + e.filename + ':' + e.lineno + '\n';
