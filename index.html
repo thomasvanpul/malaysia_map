@@ -378,6 +378,7 @@ const PROJECT_STATUS_COLORS = {
 };
 (TEDUH.projects || []).forEach(proj => {
   if(!proj.lat || !proj.lon) return;
+  if(proj.lat<1 || proj.lat>7.5 || proj.lon<99 || proj.lon>105.5) return;
   const color = PROJECT_STATUS_COLORS[proj.status] || "#999";
   const icon = L.divIcon({
     className:"",
@@ -637,7 +638,11 @@ document.querySelectorAll(".chip").forEach(chip=>{
 });
 // Default view: transit lines + malls on
 const transitChip = document.querySelector('.chip[data-layer="transit"]');
-if(transitChip){ transitChip.classList.add("on"); amenityLayers.transit.addTo(map); }
+if(transitChip){
+  transitChip.classList.add("on");
+  // Defer addTo so map finishes fitBounds before transit renders
+  setTimeout(()=>{ amenityLayers.transit.addTo(map); map.invalidateSize(); }, 300);
+}
 
 // Click empty map → reset transit highlights + panel
 map.on("click", function(){
