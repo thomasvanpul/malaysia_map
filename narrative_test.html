@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scroll Narrative Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    font-family:'IBM Plex Sans',sans-serif;
+    background:#f7f5f0;
+    color:#1a2b2e;
+  }
+  section {
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    padding:60px 24px;
+  }
+
+  #hero {
+    background:linear-gradient(180deg, #f7f5f0 0%, #eef2ef 100%);
+    text-align:center;
+    flex-direction:column;
+  }
+  #hero .eyebrow {
+    font-size:12px; letter-spacing:0.35em; text-transform:uppercase;
+    color:#5ba392; font-weight:500; margin-bottom:28px;
+    opacity:0; transform:translateY(14px);
+    animation:fadeUp 1.1s cubic-bezier(.16,1,.3,1) 0.2s forwards;
+  }
+  #hero h1 {
+    font-family:'Archivo',sans-serif; font-weight:800;
+    font-size:clamp(42px, 8vw, 88px); letter-spacing:-0.03em; line-height:1.02;
+    color:#174a40;
+    opacity:0; transform:translateY(20px);
+    animation:fadeUp 1.3s cubic-bezier(.16,1,.3,1) 0.45s forwards;
+  }
+  #hero .sub {
+    margin-top:26px; font-size:17px; color:#6b7a76; font-weight:400;
+    max-width:520px; line-height:1.6;
+    opacity:0; transform:translateY(14px);
+    animation:fadeUp 1.2s cubic-bezier(.16,1,.3,1) 0.75s forwards;
+  }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+
+  #scroll-cue {
+    position:absolute; bottom:48px; left:50%; transform:translateX(-50%);
+    font-size:11px; letter-spacing:0.25em; text-transform:uppercase;
+    color:#9cc9bd; font-weight:500;
+    opacity:0; animation:fadeUp 1s ease 1.3s forwards, breathe 3.5s ease-in-out 2.3s infinite;
+  }
+  @keyframes breathe { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+  .reveal-section { align-items:flex-start; }
+  .reveal-inner {
+    max-width:920px; margin:0 auto; width:100%;
+    display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center;
+  }
+  .reveal-label {
+    font-size:12px; letter-spacing:0.4em; text-transform:uppercase;
+    color:#5ba392; font-weight:500; margin-bottom:20px;
+    opacity:0; transform:translateY(16px); transition:opacity 1s cubic-bezier(.16,1,.3,1), transform 1s cubic-bezier(.16,1,.3,1);
+  }
+  .reveal-title {
+    font-family:'Archivo',sans-serif; font-weight:700; font-size:clamp(28px,4vw,42px);
+    letter-spacing:-0.02em; line-height:1.15; color:#174a40; margin-bottom:18px;
+    opacity:0; transform:translateY(20px); transition:opacity 1.1s cubic-bezier(.16,1,.3,1) 0.1s, transform 1.1s cubic-bezier(.16,1,.3,1) 0.1s;
+  }
+  .reveal-text {
+    font-size:15px; line-height:1.75; color:#6b7a76; max-width:400px;
+    opacity:0; transform:translateY(16px); transition:opacity 1.1s cubic-bezier(.16,1,.3,1) 0.25s, transform 1.1s cubic-bezier(.16,1,.3,1) 0.25s;
+  }
+  .reveal-visual {
+    aspect-ratio:4/3; border-radius:16px; position:relative; overflow:hidden;
+    opacity:0; transform:translateY(28px) scale(0.97);
+    transition:opacity 1.3s cubic-bezier(.16,1,.3,1) 0.15s, transform 1.3s cubic-bezier(.16,1,.3,1) 0.15s;
+    box-shadow:0 24px 64px -12px rgba(23,74,64,0.18);
+  }
+  .visual-1 { background:linear-gradient(135deg,#174a40 0%,#2e7364 45%,#5ba392 100%); }
+  .visual-2 { background:linear-gradient(135deg,#0f2e28 0%,#174a40 50%,#3d6b5c 100%); }
+  .visual-3 { background:linear-gradient(135deg,#2e7364 0%,#9cc9bd 100%); }
+  .visual-content {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-family:'Archivo',sans-serif; font-weight:800; color:rgba(255,255,255,0.92);
+    font-size:15px; letter-spacing:0.05em; text-align:center; padding:20px;
+  }
+
+  .reveal-section.visible .reveal-label,
+  .reveal-section.visible .reveal-title,
+  .reveal-section.visible .reveal-text,
+  .reveal-section.visible .reveal-visual {
+    opacity:1; transform:translateY(0) scale(1);
+  }
+
+  @media(max-width:760px){
+    .reveal-inner { grid-template-columns:1fr; gap:32px; }
+    .reveal-visual { order:-1; }
+  }
+
+  #finale {
+    background:#174a40; color:#fff; text-align:center; flex-direction:column;
+  }
+  #finale .eyebrow { color:#9cc9bd; }
+  #finale h2 {
+    font-family:'Archivo',sans-serif; font-weight:800; font-size:clamp(32px,5vw,54px);
+    letter-spacing:-0.02em; margin-bottom:24px;
+    opacity:0; transform:translateY(16px); transition:opacity 1.1s cubic-bezier(.16,1,.3,1), transform 1.1s cubic-bezier(.16,1,.3,1);
+  }
+  #finale .cta-btn {
+    margin-top:12px; font-family:'IBM Plex Sans',sans-serif; font-size:14px; font-weight:500;
+    color:#174a40; background:#fff; border:none; padding:15px 38px; border-radius:100px;
+    cursor:pointer; letter-spacing:0.02em;
+    opacity:0; transform:translateY(16px); transition:opacity 1.1s cubic-bezier(.16,1,.3,1) 0.2s, transform 1.1s cubic-bezier(.16,1,.3,1) 0.2s;
+  }
+  #finale.visible h2, #finale.visible .cta-btn { opacity:1; transform:translateY(0); }
+
+  #info { position:fixed; top:10px; left:10px; color:#0a0; font-family:monospace; font-size:11px; z-index:999; background:#fff; padding:4px 8px; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<div id="info">scroll to test reveals</div>
+
+<section id="hero">
+  <div class="eyebrow">West Malaysia</div>
+  <h1>District<br>Explorer</h1>
+  <p class="sub">Property intelligence built on real government data — transit, demographics, and 3,700+ active housing projects across the Peninsula.</p>
+  <div id="scroll-cue">Scroll</div>
+</section>
+
+<section class="reveal-section" id="s1">
+  <div class="reveal-inner">
+    <div>
+      <div class="reveal-label">Infrastructure</div>
+      <div class="reveal-title">Every rail line, every station, mapped precisely.</div>
+      <p class="reveal-text">15 transit routes stitched from raw OpenStreetMap track data — click any line to see its full station list, colored to match official operator branding.</p>
+    </div>
+    <div class="reveal-visual visual-1"><div class="visual-content">15 RAIL ROUTES<br>MAPPED</div></div>
+  </div>
+</section>
+
+<section class="reveal-section" id="s2">
+  <div class="reveal-inner">
+    <div class="reveal-visual visual-2" style="order:-1"><div class="visual-content">INVESTMENT<br>SCORE 0–100</div></div>
+    <div>
+      <div class="reveal-label">Intelligence</div>
+      <div class="reveal-title">A single score, built from five real signals.</div>
+      <p class="reveal-text">Income growth, population trend, transit access, project health, and amenity density — combined into one number for every district in West Malaysia.</p>
+    </div>
+  </div>
+</section>
+
+<section class="reveal-section" id="s3">
+  <div class="reveal-inner">
+    <div>
+      <div class="reveal-label">Housing Data</div>
+      <div class="reveal-title">3,772 active projects, sourced from KPKT.</div>
+      <p class="reveal-text">Direct from the Malaysian government's official housing registry — developer contacts, construction status, and expected completion dates.</p>
+    </div>
+    <div class="reveal-visual visual-3"><div class="visual-content">3,772 PROJECTS<br>TRACKED</div></div>
+  </div>
+</section>
+
+<section id="finale">
+  <div class="eyebrow">Ready</div>
+  <h2>Explore the map.</h2>
+  <button class="cta-btn">Enter West Malaysia District Explorer</button>
+</section>
+
+<script>
+const info = document.getElementById('info');
+const observer = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      e.target.classList.add('visible');
+      info.textContent = 'revealed: ' + e.target.id;
+    }
+  });
+}, { threshold: 0.35 });
+
+document.querySelectorAll('.reveal-section, #finale').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
