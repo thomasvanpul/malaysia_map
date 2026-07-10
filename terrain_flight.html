@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Terrain Flyover - Full Sequence</title>
+<link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; background:#0a0d12; }
+  #fly-map { position:fixed; inset:0; z-index:10; transition:opacity 1.2s ease; }
+  #real-map { position:fixed; inset:0; z-index:5; opacity:0; }
+  #info { position:fixed; top:10px; left:10px; color:#8f8; font-family:monospace; font-size:11px; z-index:200; white-space:pre; }
+  #error-log { position:fixed; top:40px; left:10px; color:#f66; font-family:monospace; font-size:11px; z-index:200; white-space:pre-wrap; max-width:90vw; }
+
+  #titles { position:fixed; inset:0; z-index:50; pointer-events:none; perspective:800px; }
+  .fly-text {
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%) translateZ(-800px);
+    font-family:-apple-system,'Helvetica Neue',sans-serif;
+    font-weight:700; color:#fff; text-align:center;
+    opacity:0; white-space:nowrap;
+    text-shadow:0 4px 24px rgba(0,0,0,0.6);
+  }
+  #hint {
+    position:fixed; bottom:56px; left:50%; transform:translateX(-50%);
+    z-index:60; font-family:-apple-system,sans-serif; font-size:12px;
+    color:rgba(255,255,255,0.55); letter-spacing:0.15em; text-transform:uppercase;
+    font-weight:500; animation:breathe 3.5s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100%{opacity:.35;transform:translateX(-50%) translateY(0)} 50%{opacity:.85;transform:translateX(-50%) translateY(-3px)} }
+</style>
+</head>
+<body>
+<div id="fly-map"></div>
+<div id="real-map"></div>
+<div id="titles">
+  <div class="fly-text" id="txt1" style="font-size:56px;letter-spacing:-0.02em;">West Malaysia</div>
+  <div class="fly-text" id="txt2" style="font-size:24px;font-weight:500;color:rgba(255,255,255,.75)">District Explorer</div>
+</div>
+<div id="hint">Scroll to continue</div>
+<div id="info">loading...</div>
+<div id="error-log"></div>
+
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+window.addEventListener('error', function(e){
+  document.getElementById('error-log').textContent += 'ERROR: ' + e.message + ' @ ' + e.filename + ':' + e.lineno + '\n';
+});
+
+const KEY = 'r1vaJcTInBX0Pvp3CevE';
+const info = document.getElementById('info');
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Flight path keyframes: [lng, lat, zoom, pitch, bearing]
+// Starts far NW of peninsula at steep pitch (horizon skim), sweeps down the
+// spine of the peninsula, levels out over KL/Selangor at the end.
+const KEYFRAMES = [
+  { t:0.00, lng:100.20, lat:6.30, zoom:8.2,  pitch:80, bearing:140 },
+  { t:0.25, lng:100.65, lat:5.20, zoom:9.0,  pitch:78, bearing:150 },
+  { t:0.50, lng:101.05, lat:4.30, zoom:9.6,  pitch:74, bearing:160 },
+  { t:0.72, lng:101.55, lat:3.75, zoom:10.4, pitch:55, bearing:170 },
+  { t:0.90, lng:101.75, lat:3.55, zoom:10.9, pitch:22, bearing:178 },
+  { t:1.00, lng:101.9758, lat:4.05, zoom:6.9, pitch:0,  bearing:180 },
+];
+
+function lerp(a,b,t){ return a + (b-a)*t; }
+function easeInOutCubic(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+
+function sampleFlight(t){
+  t = Math.max(0, Math.min(1, t));
+  let i = 0;
+  while(i < KEYFRAMES.length-2 && KEYFRAMES[i+1].t < t) i++;
+  const a = KEYFRAMES[i], b = KEYFRAMES[i+1];
+  const localT = (t - a.t) / (b.t - a.t || 1);
+  const eased = easeInOutCubic(localT);
+  return {
+    lng: lerp(a.lng, b.lng, eased),
+    lat: lerp(a.lat, b.lat, eased),
+    zoom: lerp(a.zoom, b.zoom, eased),
+    pitch: lerp(a.pitch, b.pitch, eased),
+    bearing: lerp(a.bearing, b.bearing, eased),
+  };
+}
+
+const start = KEYFRAMES[0];
+const flyMap = new maplibregl.Map({
+  container: 'fly-map',
+  style: `https://api.maptiler.com/maps/dataviz-light/style.json?key=${KEY}`,
+  center: [start.lng, start.lat],
+  zoom: start.zoom,
+  pitch: start.pitch,
+  bearing: start.bearing,
+  maxPitch: 85,
+  antialias: true,
+  interactive: false,
+});
+
+let terrainReady = false;
+flyMap.on('load', () => {
+  info.textContent = 'style loaded, adding terrain...';
+  flyMap.addSource('terrain-src', {
+    type: 'raster-dem',
+    url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${KEY}`,
+    tileSize: 256,
+  });
+  flyMap.setTerrain({ source: 'terrain-src', exaggeration: 1.6 });
+
+  flyMap.setSky({
+    'sky-color': '#0f1420',
+    'sky-horizon-blend': 0.55,
+    'horizon-color': '#3a4a6b',
+    'horizon-fog-blend': 0.65,
+    'fog-color': '#c8d4de',
+    'fog-ground-blend': 0.55,
+  });
+  terrainReady = true;
+  info.textContent = 'ready';
+});
+
+flyMap.on('error', (e) => { info.textContent = 'MAP ERROR: ' + (e.error ? e.error.message : 'unknown'); });
+
+// ---- Real Leaflet map (destination), pre-initialized so it's warm at handoff ----
+let realMap = null;
+let mapInited = false;
+const DEST = [4.05, 101.9758];
+function initRealMap(){
+  if(mapInited) return;
+  mapInited = true;
+  realMap = L.map('real-map', { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false });
+  L.tileLayer(`https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=${KEY}`, { maxZoom:19 }).addTo(realMap);
+  realMap.setView(DEST, 7);
+}
+
+// ---- Flight state machine ----
+let flightActive = false;
+let flightT = 0;
+const FLIGHT_DURATION = prefersReducedMotion ? 1.2 : 7.5;
+
+function startFlight(){
+  if(flightActive || !terrainReady) return;
+  flightActive = true;
+  flightT = 0;
+  document.getElementById('hint').style.opacity = '0';
+  initRealMap();
+}
+
+let scrollConsumed = false;
+window.addEventListener('wheel', ()=>{ if(!scrollConsumed){ scrollConsumed=true; startFlight(); } }, {passive:true});
+window.addEventListener('touchmove', ()=>{ if(!scrollConsumed){ scrollConsumed=true; startFlight(); } }, {passive:true});
+document.getElementById('hint').addEventListener('click', startFlight);
+
+// ---- Flying text timing ----
+function updateText(t){
+  const txt1 = document.getElementById('txt1');
+  const txt2 = document.getElementById('txt2');
+  // txt1 flies toward viewer between t=0.05-0.30, then recedes/fades 0.30-0.42
+  function flyPhase(el, inStart, inEnd, outStart, outEnd){
+    let z, op;
+    if(t < inStart){ z=-800; op=0; }
+    else if(t < inEnd){ const p=(t-inStart)/(inEnd-inStart); z=lerp(-800,0,p); op=p; }
+    else if(t < outStart){ z=0; op=1; }
+    else if(t < outEnd){ const p=(t-outStart)/(outEnd-outStart); z=lerp(0,400,p); op=1-p; }
+    else { z=400; op=0; }
+    el.style.opacity = String(op);
+    el.style.transform = `translate(-50%,-50%) translateZ(${z}px)`;
+  }
+  flyPhase(txt1, 0.04, 0.16, 0.22, 0.32);
+  flyPhase(txt2, 0.08, 0.20, 0.22, 0.32);
+}
+
+// ---- Animation loop ----
+let lastTime = performance.now();
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - lastTime)/1000, 0.05);
+  lastTime = now;
+
+  if(flightActive && flightT < 1){
+    flightT = Math.min(1, flightT + dt/FLIGHT_DURATION);
+    const s = sampleFlight(flightT);
+    flyMap.jumpTo({ center:[s.lng, s.lat], zoom:s.zoom, pitch:s.pitch, bearing:s.bearing });
+    updateText(flightT);
+
+    if(flightT > 0.86){
+      const crossT = (flightT - 0.86) / 0.14;
+      document.getElementById('fly-map').style.opacity = String(1-crossT);
+      document.getElementById('real-map').style.opacity = String(crossT);
+    }
+    if(flightT >= 1){
+      document.getElementById('fly-map').style.pointerEvents = 'none';
+      if(realMap){
+        realMap.dragging.enable();
+        realMap.scrollWheelZoom.enable();
+        L.control.zoom({position:'topleft'}).addTo(realMap);
+      }
+    }
+  }
+}
+requestAnimationFrame(animate);
+
+window.__startFlight = startFlight;
+window.__getFlightT = () => flightT;
+window.__sampleFlight = sampleFlight;
+</script>
+</body>
+</html>
