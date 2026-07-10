@@ -50,6 +50,12 @@
 </head>
 <body>
 <div id="info">loading...</div>
+<div id="error-log" style="position:fixed;top:30px;left:10px;color:#f66;font-family:monospace;font-size:11px;z-index:200;white-space:pre-wrap;max-width:90vw;"></div>
+<script>
+window.addEventListener('error', function(e){
+  document.getElementById('error-log').textContent += 'ERROR: ' + e.message + ' @ line ' + e.lineno + '\n';
+});
+</script>
 <div id="title-wrap">
   <h1>West Malaysia District Explorer</h1>
   <p>Property intelligence, reimagined.</p>
