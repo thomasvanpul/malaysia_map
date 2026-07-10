@@ -217,7 +217,7 @@ window.addEventListener('wheel', (e)=>{
 const clock = new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
-  const dt = clock.getDelta();
+  const dt = Math.min(clock.getDelta(), 0.05); // clamp to prevent huge jumps from throttled/backgrounded tabs
 
   if(!flightActive){
     earth.rotation.y += IDLE_ROT_SPEED * dt;
