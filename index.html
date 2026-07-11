@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>West Malaysia District Explorer</title>
+<title>Malaysia District Explorer</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
@@ -22,7 +22,7 @@
   .float-bar{
     position:fixed; z-index:400;
     background:rgba(255,255,255,0.78);
-    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
     border:1px solid rgba(255,255,255,0.5);
     border-radius:14px;
     box-shadow:0 10px 40px rgba(23,74,64,0.14), 0 1px 3px rgba(0,0,0,0.06);
@@ -57,7 +57,7 @@
     position:fixed; top:16px; right:16px; bottom:16px;
     width:380px; max-width:calc(100vw - 32px);
     background:rgba(255,255,255,0.92);
-    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
     border:1px solid rgba(255,255,255,0.5);
     border-radius:16px;
     box-shadow:0 20px 60px rgba(23,74,64,0.18);
@@ -300,7 +300,7 @@
 </head>
 <body>
 <div id="brandBar" class="float-bar">
-  <h1>West Malaysia <span>District Explorer</span></h1>
+  <h1>Malaysia <span>District Explorer</span></h1>
 </div>
 <div id="searchBar" class="float-bar">
   <div class="search-wrap">
@@ -350,7 +350,8 @@ const color = p => RAMP[BREAKS.filter(b=>p>b).length];
 document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
-const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0.9, zoomSnap:0.25, zoomDelta:0.25, bounceAtZoomLimits:false});
+const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0.9, zoomSnap:0.25, zoomDelta:0.25, bounceAtZoomLimits:false, zoomControl:false});
+L.control.zoom({position:"bottomleft"}).addTo(map);
 
 // Zoom toward cursor — clean version, no pan correction
 (function(){
@@ -468,7 +469,7 @@ const PROJECT_STATUS_COLORS = {
   if(proj.developer?.name) tip += `<br>${proj.developer.name}`;
   if(proj.expected_completion) tip += `<br>Expected: ${proj.expected_completion}`;
   m.bindTooltip(tip, {sticky:true});
-  m.on("click", ()=>showProject(proj));
+  m.on("click", (e)=>{L.DomEvent.stopPropagation(e); showProject(proj);});
   amenityLayers.projects.addLayer(m);
 });
 // Zoom-based visibility: supermarkets only render at zoom >= 12 to prevent
@@ -743,7 +744,7 @@ const layer = L.geoJSON(DATA,{
     l.bindTooltip(f.properties.shapeName + " &middot; " + fmt(f.properties.stats.total), {sticky:true});
     l.on("mouseover",()=>{ if(l!==selected) l.setStyle({stroke:true,weight:3,color:"#e0a422"}); });
     l.on("mouseout",()=>{ if(l!==selected) layer.resetStyle(l); });
-    l.on("click",()=>onClick(f,l));
+    l.on("click",(e)=>{L.DomEvent.stopPropagation(e); onClick(f,l);});
   }
 }).addTo(map);
 map.fitBounds(layer.getBounds().pad(0.03));
