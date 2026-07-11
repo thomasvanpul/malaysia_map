@@ -220,6 +220,16 @@
   .mini-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 
   /* fade-in animation removed: its transform:scale() keyframes permanently overrode Leaflet's own translate3d positioning transform, causing all cluster/project markers to collapse to (0,0) */
+
+  .score-breakdown{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .score-factor{display:flex;align-items:center;gap:10px;padding:7px 0}
+  .score-factor .tick{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700}
+  .score-factor .tick.good{background:#00a651}
+  .score-factor .tick.bad{background:#d1d5db;color:#6b7a76}
+  .score-factor .body{flex:1;min-width:0}
+  .score-factor .label-row{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--ink)}
+  .score-factor .detail{font-size:11px;color:var(--muted);margin-top:1px}
+  .score-factor .pts{font-size:11px;color:var(--muted);font-weight:500}
 </style>
 </head>
 <body>
@@ -792,28 +802,42 @@ function trendSVG(trend){
     <path d="${area}" fill="#d7e8e3"/><path d="${path}" fill="none" stroke="#2e7364" stroke-width="2"/>${dots}${labels}</svg>`;
 }
 
-function investScore(s){
-  if(!s) return 0;
+function investScoreBreakdown(s){
+  if(!s) return {total:0, factors:[]};
   const safe=(n)=>isFinite(n)&&!isNaN(n)?n:0;
   const incGrowth = (s.income_trend&&s.income_trend.length>=2&&s.income_trend[0][1])
     ? safe((s.income_trend.at(-1)[1]-s.income_trend[0][1])/s.income_trend[0][1]*100) : 0;
   const popGrowth = (s.trend&&s.trend.length>=2&&s.trend[0][1])
     ? safe((s.trend.at(-1)[1]-s.trend[0][1])/s.trend[0][1]*100) : 0;
   const a = s.amenities||{};
-  const transit = Math.min(20, (a.rail_stations||0)*2);  // max 20pts for transit
-  const incomeScore = s.income_median ? Math.min(20, (s.income_median-2000)/300) : 0;
-  const growthScore = Math.min(20, Math.max(0, (incGrowth+popGrowth)*2));
+  const transit = Math.min(20, (a.rail_stations||0)*2);
+  const incomeScore = s.income_median ? Math.min(20, Math.max(0,(s.income_median-2000)/300)) : 0;
+  const growthScore = Math.min(20, Math.max(0, (safe(incGrowth)+safe(popGrowth))*2));
+  const stProjects = (DISTRICT_PROJECTS[s.state]||[]);
+  const troubledCount = stProjects.filter(p=>p.status==="Sakit"||p.status==="Permit Dibatalkan").length;
   const projectHealth = (() => {
-    const st = (DISTRICT_PROJECTS[s.state]||[]);
-    if(!st.length) return 10;
-    const troubled = st.filter(p=>p.status==="Sakit"||p.status==="Permit Dibatalkan").length;
-    const ratio = troubled/st.length;
+    if(!stProjects.length) return 10;
+    const ratio = troubledCount/stProjects.length;
     return Math.round(20*(1-ratio));
   })();
-  const malls = Math.min(10, (a.malls||0)/2);
-  const schools = Math.min(10, (a.school_points?.length||a.schools||0)/5);
-  return Math.min(100, Math.round(transit+incomeScore+growthScore+projectHealth+malls+schools));
+  const mallCount = a.malls||0;
+  const schoolCount = a.school_points?.length||a.schools||0;
+  const malls = Math.min(10, mallCount/2);
+  const schools = Math.min(10, schoolCount/5);
+  const total = transit+incomeScore+growthScore+projectHealth+malls+schools;
+
+  const factors = [
+    {label:"Transit access", score:Math.round(transit), max:20, detail:`${a.rail_stations||0} rail station${(a.rail_stations||0)===1?"":"s"} nearby`, good: transit>=14},
+    {label:"Income level", score:Math.round(incomeScore), max:20, detail: s.income_median?`RM ${s.income_median.toLocaleString()} median income`:"No income data", good: incomeScore>=14},
+    {label:"Growth momentum", score:Math.round(growthScore), max:20, detail:`${safe(popGrowth).toFixed(1)}% population + ${safe(incGrowth).toFixed(1)}% income growth`, good: growthScore>=14},
+    {label:"Project health", score:Math.round(projectHealth), max:20, detail: stProjects.length?`${troubledCount} of ${stProjects.length} state projects troubled`:"No project data", good: projectHealth>=14},
+    {label:"Shopping access", score:Math.round(malls), max:10, detail:`${mallCount} mall${mallCount===1?"":"s"} in district`, good: malls>=7},
+    {label:"School access", score:Math.round(schools), max:10, detail:`${schoolCount} school${schoolCount===1?"":"s"} in district`, good: schools>=7},
+  ];
+
+  return {total: isNaN(total)?0:Math.min(100, Math.round(total)), factors};
 }
+function investScore(s){ return investScoreBreakdown(s).total; }
 
 function scoreColor(n){
   if(n>=75) return "#00a651";
@@ -1022,7 +1046,8 @@ function renderDistrict(f){
     <div class="dname">${name}</div>
     <div class="dsub">${s.state} &middot; 2025 estimates</div>
     ${(()=>{
-      const sc=investScore(s);
+      const breakdown=investScoreBreakdown(s);
+      const sc=breakdown.total;
       return `<div class="score-bar">
         ${scoreRing(sc)}
         <div class="score-label">
@@ -1036,7 +1061,17 @@ function renderDistrict(f){
         <div class="sf"><div class="n">${(s.amenities?.rail_stations||0)}</div><div class="l">Rail stations</div></div>
         <div class="sf"><div class="n">${(DISTRICT_PROJECTS[s.state]||[]).filter(p=>p.status==="Lancar").length}</div><div class="l">Active projects</div></div>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px">${s.income_median?(s.income_median>6590?"Above":"Below")+" national median (RM 6,590)":""}</div>`;
+      <div style="font-size:11px;color:var(--muted);margin:-4px 0 10px">${s.income_median?(s.income_median>6590?"Above":"Below")+" national median (RM 6,590)":""}</div>
+      <div class="score-breakdown">
+        ${breakdown.factors.map(f=>`
+          <div class="score-factor">
+            <div class="tick ${f.good?'good':'bad'}">${f.good?'✓':'–'}</div>
+            <div class="body">
+              <div class="label-row"><span>${f.label}</span><span class="pts">${f.score}/${f.max}</span></div>
+              <div class="detail">${f.detail}</div>
+            </div>
+          </div>`).join("")}
+      </div>`;
     })()}
     <div class="big">${fmt(s.total)}<small>residents</small></div>
     <div class="row">
