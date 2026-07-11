@@ -1058,6 +1058,13 @@ function fmtRM(v){
   return "RM " + Math.round(n).toLocaleString();
 }
 
+function fmtRM(v){
+  if(!v) return null;
+  const n = parseFloat(String(v).replace(/,/g,""));
+  if(isNaN(n)) return null;
+  return "RM " + Math.round(n).toLocaleString();
+}
+
 function buildUnitSection(proj){
   const detail = proj.detail;
   if(!detail || !detail.unit_types || !detail.unit_types.length){
@@ -1074,23 +1081,50 @@ function buildUnitSection(proj){
       <div class="lbl">Price range across ${types.length} unit type${types.length===1?"":"s"}</div>
     </div>`;
   }
+
+  let gdv = 0, totalUnits = 0, remainingUnits = 0;
+  types.forEach(function(t){
+    const pMin = parseFloat(String(t.price_min||"").replace(/,/g,""));
+    const pMax = parseFloat(String(t.price_max||"").replace(/,/g,""));
+    const units = parseInt(t.units);
+    const takeup = parseFloat(t.takeup_pct);
+    if(isNaN(units)) return;
+    const avgPrice = (!isNaN(pMin)&&!isNaN(pMax)) ? (pMin+pMax)/2 : (!isNaN(pMin)?pMin:(!isNaN(pMax)?pMax:NaN));
+    if(!isNaN(avgPrice)) gdv += avgPrice * units;
+    totalUnits += units;
+    const soldUnits = !isNaN(takeup) ? Math.round(units * takeup / 100) : 0;
+    remainingUnits += (units - soldUnits);
+  });
+
   const rows = types.map(function(t){
     const pMin = fmtRM(t.price_min), pMax = fmtRM(t.price_max);
     const priceStr = (pMin&&pMax) ? (pMin===pMax?pMin:pMin+" - "+pMax) : (pMin||pMax||"-");
     const takeup = parseFloat(t.takeup_pct);
     const takeupStr = !isNaN(takeup) ? `<span class="takeup-bar"><span class="takeup-fill" style="width:${Math.min(100,takeup)}%"></span></span>${takeup.toFixed(0)}%` : "-";
+    const unitsInt = parseInt(t.units);
+    const remainingForType = (!isNaN(unitsInt) && !isNaN(takeup)) ? Math.max(0, unitsInt - Math.round(unitsInt*takeup/100)) : null;
     return `<tr>
       <td>${t.type||"-"}${t.bedrooms?" "+t.bedrooms+"BR":""}${t.bathrooms?"/"+t.bathrooms+"BA":""}</td>
       <td>${t.area?t.area+" sf":"-"}</td>
-      <td>${t.units!=null?t.units:"-"}</td>
+      <td>${t.units!=null?t.units:"-"}${remainingForType!=null?` <span style="color:var(--muted);font-size:10px">(${remainingForType} left)</span>`:""}</td>
       <td class="price">${priceStr}</td>
       <td>${takeupStr}</td>
     </tr>`;
   }).join("");
+
   const brochure = detail.brochure_url
     ? `<a class="brochure-link" href="${detail.brochure_url}" target="_blank" rel="noopener">View developer brochure (PDF)</a>`
     : "";
+
+  const gdvSection = (gdv > 0) ? `<div class="score-factors" style="margin-top:10px">
+      <div class="sf"><div class="n" style="font-size:15px">RM ${(gdv/1000000).toFixed(1)}M</div><div class="l">Est. GDV</div></div>
+      <div class="sf"><div class="n">${totalUnits}</div><div class="l">Total units</div></div>
+      <div class="sf"><div class="n">${remainingUnits}</div><div class="l">Est. remaining</div></div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin:4px 0 0">GDV = sum of (avg price &times; unit count) per type. Estimate, not an official developer figure.</div>` : "";
+
   return `${priceHero}
+    ${gdvSection}
     <h3>Unit Types & Pricing</h3>
     <table class="unit-table">
       <tr><th>Type</th><th>Area</th><th>Units</th><th>Price (RM)</th><th>Take-up</th></tr>
