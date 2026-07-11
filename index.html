@@ -152,7 +152,7 @@
   .chip.mall.on{background:#a94e2c;border-color:#a94e2c}
   .chip.sup.on{background:#5f6f24;border-color:#5f6f24}
   .chip.transit.on{background:#333;border-color:#333}
-  .chip.projects.on{background:#7c3aed;border-color:#7c3aed}
+  .chip.projects.on{background:#0369A1;border-color:#0369A1}
   .chip.schools.on{background:#0369a1;border-color:#0369a1}
   .chip.hospitals.on{background:#be123c;border-color:#be123c}
   .amen-pop{font-family:'IBM Plex Sans',sans-serif;max-width:260px}
@@ -398,7 +398,7 @@ const amenityLayers = {
     iconCreateFunction: function(cluster){
       const n = cluster.getChildCount();
       const sz = n>50?52:n>20?44:36;
-      const col = "#7c3aed";
+      const col = "#0369A1";
       return L.divIcon({
         className:"",
         html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?11:13}px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
