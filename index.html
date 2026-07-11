@@ -289,6 +289,13 @@
     background:var(--paper);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
     font-size:14px;color:var(--muted);z-index:10}
   .panel-close:hover{background:var(--teal-1);color:var(--ink)}
+
+  .radius-control{background:var(--paper);border-radius:8px;padding:12px 14px;margin:10px 0}
+  .radius-control .rlabel{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:8px}
+  .radius-control .rlabel span:last-child{color:var(--teal-5);font-family:'Archivo',sans-serif}
+  .radius-control input[type=range]{width:100%;accent-color:var(--teal-4)}
+  .nearby-item{cursor:pointer;transition:background 0.15s}
+  .nearby-item:hover{background:var(--teal-1);margin:0 -8px;padding:6px 8px!important;border-radius:6px}
 </style>
 </head>
 <body>
@@ -949,32 +956,78 @@ function statusClass(s){
   return "status-belum";
 }
 
-function buildNearby(proj){
-  if(!proj.lat||!proj.lon) return "";
-  var malls=[],stations=[],schools=[],hospitals=[];
+let radiusCircle = null;
+let currentRadiusProj = null;
+
+function collectAllAmenities(){
+  const malls=[], stations=[], schools=[], hospitals=[];
   DATA.features.forEach(function(f){
-    var a=f.properties.stats.amenities||{};
+    const a=f.properties.stats.amenities||{};
     (a.mall_points||[]).forEach(function(p){malls.push(p);});
     (a.rail_points||[]).forEach(function(p){stations.push(p);});
     (a.school_points||[]).forEach(function(p){schools.push(p);});
     (a.hospital_points||[]).forEach(function(p){hospitals.push(p);});
   });
-  function rowHTML(items,emoji){
+  return {malls, stations, schools, hospitals};
+}
+
+function renderNearbyList(proj, radiusKm){
+  const all = collectAllAmenities();
+  function within(items){
+    return items
+      .filter(p=>p.lat&&p.lon&&p.name)
+      .map(p=>({...p, km: haversineKm(proj.lat, proj.lon, p.lat, p.lon)}))
+      .filter(p=>p.km<=radiusKm)
+      .sort((a,b)=>a.km-b.km)
+      .slice(0, 8);
+  }
+  const ns = within(all.stations);
+  const nm = within(all.malls);
+  const nsc = within(all.schools);
+  const nh = within(all.hospitals);
+
+  function rowHTML(items, emoji){
     return items.map(function(p){
-      return '<div class="proj-item" style="padding:6px 0"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px">'+emoji+' '+p.name+'</span><span style="font-size:11px;color:var(--muted);background:var(--paper);padding:2px 6px;border-radius:8px">'+fmtDist(p.km)+'</span></div></div>';
+      return `<div class="proj-item nearby-item" style="padding:6px 0" onclick="map.setView([${p.lat},${p.lon}],16)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px">${emoji} ${p.name}</span>
+          <span style="font-size:11px;color:var(--muted);background:var(--panel);padding:2px 6px;border-radius:8px">${fmtDist(p.km)}</span>
+        </div></div>`;
     }).join("");
   }
-  var nm=nearbyItems(proj.lat,proj.lon,malls,3,5);
-  var ns=nearbyItems(proj.lat,proj.lon,stations,3,3);
-  var nsc=nearbyItems(proj.lat,proj.lon,schools,2,3);
-  var nh=nearbyItems(proj.lat,proj.lon,hospitals,2,5);
-  if(!nm.length&&!ns.length&&!nsc.length&&!nh.length) return "";
-  return "<h3>Nearby</h3><div class=\"proj-list\" style=\"margin-top:4px\">"
-    +(ns.length?rowHTML(ns,"🚆"):"")
-    +(nm.length?rowHTML(nm,"🛍"):"")
-    +(nsc.length?rowHTML(nsc,"🎓"):"")
-    +(nh.length?rowHTML(nh,"🏥"):"")
-    +"</div>";
+
+  const total = ns.length + nm.length + nsc.length + nh.length;
+  const listEl = document.getElementById("nearbyList");
+  if(!listEl) return;
+  if(!total){
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:8px 0">Nothing found within ${radiusKm.toFixed(1)}km. Try a larger radius.</div>`;
+  } else {
+    listEl.innerHTML = rowHTML(ns,"🚆") + rowHTML(nm,"🛒") + rowHTML(nsc,"🎓") + rowHTML(nh,"🏥");
+  }
+
+  if(radiusCircle) map.removeLayer(radiusCircle);
+  radiusCircle = L.circle([proj.lat, proj.lon], {
+    radius: radiusKm*1000, color:"#2e7364", weight:1.5, fillColor:"#5ba392", fillOpacity:0.08, dashArray:"4,4"
+  }).addTo(map);
+}
+
+function onRadiusChange(val){
+  const km = parseFloat(val);
+  document.getElementById("radiusVal").textContent = km.toFixed(1) + " km";
+  if(currentRadiusProj) renderNearbyList(currentRadiusProj, km);
+}
+
+function buildNearby(proj){
+  if(!proj.lat||!proj.lon) return "";
+  currentRadiusProj = proj;
+  const defaultRadius = 3;
+  setTimeout(function(){ renderNearbyList(proj, defaultRadius); }, 50);
+  return `<h3>Nearby</h3>
+    <div class="radius-control">
+      <div class="rlabel"><span>Search radius</span><span id="radiusVal">${defaultRadius.toFixed(1)} km</span></div>
+      <input type="range" min="0.5" max="10" step="0.5" value="${defaultRadius}" oninput="onRadiusChange(this.value)">
+    </div>
+    <div class="proj-list" id="nearbyList" style="margin-top:4px"></div>`;
 }
 
 const GOOGLE_SV_KEY = "AIzaSyCYA2qvGMJ0_EDbfxd15KPOQkGdrodzxrU";
@@ -1017,52 +1070,23 @@ function buildUnitSection(proj){
       <div class="lbl">Price range across ${types.length} unit type${types.length===1?"":"s"}</div>
     </div>`;
   }
-
-  // GDV (Gross Development Value) = sum of (units x avg price) across all unit types
-  // Remaining units = total units - (units already taken up per takeup_pct)
-  let gdv = 0, totalUnits = 0, remainingUnits = 0, hasFullData = true;
-  types.forEach(function(t){
-    const pMin = parseFloat(String(t.price_min||"").replace(/,/g,""));
-    const pMax = parseFloat(String(t.price_max||"").replace(/,/g,""));
-    const units = parseInt(t.units);
-    const takeup = parseFloat(t.takeup_pct);
-    if(isNaN(units)){ hasFullData = false; return; }
-    const avgPrice = (!isNaN(pMin)&&!isNaN(pMax)) ? (pMin+pMax)/2 : (!isNaN(pMin)?pMin:(!isNaN(pMax)?pMax:NaN));
-    if(!isNaN(avgPrice)) gdv += avgPrice * units;
-    totalUnits += units;
-    const soldUnits = !isNaN(takeup) ? Math.round(units * takeup / 100) : 0;
-    remainingUnits += (units - soldUnits);
-  });
-
   const rows = types.map(function(t){
     const pMin = fmtRM(t.price_min), pMax = fmtRM(t.price_max);
     const priceStr = (pMin&&pMax) ? (pMin===pMax?pMin:pMin+" - "+pMax) : (pMin||pMax||"-");
     const takeup = parseFloat(t.takeup_pct);
     const takeupStr = !isNaN(takeup) ? `<span class="takeup-bar"><span class="takeup-fill" style="width:${Math.min(100,takeup)}%"></span></span>${takeup.toFixed(0)}%` : "-";
-    const unitsInt = parseInt(t.units);
-    const remainingForType = (!isNaN(unitsInt) && !isNaN(takeup)) ? Math.max(0, unitsInt - Math.round(unitsInt*takeup/100)) : null;
     return `<tr>
       <td>${t.type||"-"}${t.bedrooms?" "+t.bedrooms+"BR":""}${t.bathrooms?"/"+t.bathrooms+"BA":""}</td>
       <td>${t.area?t.area+" sf":"-"}</td>
-      <td>${t.units!=null?t.units:"-"}${remainingForType!=null?` <span style="color:var(--muted);font-size:10px">(${remainingForType} left)</span>`:""}</td>
+      <td>${t.units!=null?t.units:"-"}</td>
       <td class="price">${priceStr}</td>
       <td>${takeupStr}</td>
     </tr>`;
   }).join("");
-
   const brochure = detail.brochure_url
     ? `<a class="brochure-link" href="${detail.brochure_url}" target="_blank" rel="noopener">View developer brochure (PDF)</a>`
     : "";
-
-  const gdvSection = (gdv > 0) ? `<div class="score-factors" style="margin-top:10px">
-      <div class="sf"><div class="n" style="font-size:15px">RM ${(gdv/1000000).toFixed(1)}M</div><div class="l">Est. GDV</div></div>
-      <div class="sf"><div class="n">${totalUnits}</div><div class="l">Total units</div></div>
-      <div class="sf"><div class="n">${remainingUnits}</div><div class="l">Est. remaining</div></div>
-    </div>
-    <div style="font-size:10px;color:var(--muted);margin:4px 0 0">GDV = sum of (avg price &times; unit count) per type. Estimate, not an official developer figure.</div>` : "";
-
   return `${priceHero}
-    ${gdvSection}
     <h3>Unit Types & Pricing</h3>
     <table class="unit-table">
       <tr><th>Type</th><th>Area</th><th>Units</th><th>Price (RM)</th><th>Take-up</th></tr>
