@@ -1,0 +1,30 @@
+name: Daily TEDUH deep crawl
+
+on:
+  schedule:
+    # Runs at 03:00 UTC daily (~11am Malaysia time)
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}  # allows manual trigger from the Actions tab
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run TEDUH deep crawler
+        run: python3 fetch_teduh_daily.py
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add teduh_projects.json teduh_history.json
+          git diff --cached --quiet || git commit -m "Automated daily TEDUH crawl: $(date -u +%Y-%m-%d)"
+          git push
