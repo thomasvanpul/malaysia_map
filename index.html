@@ -802,6 +802,10 @@ map.fitBounds(layer.getBounds().pad(0.03));
         if(item.type==="District"){
           const l = districtLayerMap[item.label];
           if(l){ map.fitBounds(l.getBounds().pad(0.1)); l.fire("click"); }
+        } else if(item.type==="Project"){
+          const fullProj = (TEDUH.projects||[]).find(p=>p.name===item.label);
+          if(item.latlng) map.setView(item.latlng, 15);
+          if(fullProj) showProject(fullProj);
         } else if(item.latlng){
           map.setView(item.latlng, 14);
         }
