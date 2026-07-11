@@ -230,6 +230,18 @@
   .score-factor .label-row{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--ink)}
   .score-factor .detail{font-size:11px;color:var(--muted);margin-top:1px}
   .score-factor .pts{font-size:11px;color:var(--muted);font-weight:500}
+
+  .unit-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+  .unit-table th{text-align:left;font-family:'Archivo',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);padding:6px 8px;border-bottom:2px solid var(--ink)}
+  .unit-table td{padding:8px;border-bottom:1px solid var(--line)}
+  .unit-table td.price{font-weight:700;color:var(--teal-5)}
+  .takeup-bar{width:60px;height:6px;background:var(--teal-1);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:6px}
+  .takeup-fill{height:100%;background:var(--teal-4)}
+  .price-range-hero{background:var(--teal-5);color:#fff;border-radius:10px;padding:14px 16px;margin:12px 0;text-align:center}
+  .price-range-hero .amt{font-family:'Archivo',sans-serif;font-weight:800;font-size:20px}
+  .price-range-hero .lbl{font-size:11px;opacity:0.85;margin-top:2px}
+  .brochure-link{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--paper);border-radius:8px;margin-top:10px;text-decoration:none;color:var(--ink);font-size:13px;font-weight:600}
+  .brochure-link:hover{background:var(--teal-1)}
 </style>
 </head>
 <body>
@@ -936,6 +948,55 @@ function nearbyItems(lat,lon,points,maxN,maxKm){
 }
 function fmtDist(km){return km<1?(km*1000).toFixed(0)+"m":(km).toFixed(1)+"km";}
 
+function fmtRM(v){
+  if(!v) return null;
+  const n = parseFloat(String(v).replace(/,/g,""));
+  if(isNaN(n)) return null;
+  return "RM " + Math.round(n).toLocaleString();
+}
+
+function buildUnitSection(proj){
+  const detail = proj.detail;
+  if(!detail || !detail.unit_types || !detail.unit_types.length){
+    return "";
+  }
+  const types = detail.unit_types;
+  const mins = types.map(t=>parseFloat(String(t.price_min||"").replace(/,/g,""))).filter(n=>!isNaN(n));
+  const maxs = types.map(t=>parseFloat(String(t.price_max||"").replace(/,/g,""))).filter(n=>!isNaN(n));
+  let priceHero = "";
+  if(mins.length && maxs.length){
+    const lo = Math.min(...mins), hi = Math.max(...maxs);
+    priceHero = `<div class="price-range-hero">
+      <div class="amt">RM ${Math.round(lo).toLocaleString()} - ${Math.round(hi).toLocaleString()}</div>
+      <div class="lbl">Price range across ${types.length} unit type${types.length===1?"":"s"}</div>
+    </div>`;
+  }
+  const rows = types.map(function(t){
+    const pMin = fmtRM(t.price_min), pMax = fmtRM(t.price_max);
+    const priceStr = (pMin&&pMax) ? (pMin===pMax?pMin:pMin+" - "+pMax) : (pMin||pMax||"-");
+    const takeup = parseFloat(t.takeup_pct);
+    const takeupStr = !isNaN(takeup) ? `<span class="takeup-bar"><span class="takeup-fill" style="width:${Math.min(100,takeup)}%"></span></span>${takeup.toFixed(0)}%` : "-";
+    return `<tr>
+      <td>${t.type||"-"}${t.bedrooms?" "+t.bedrooms+"BR":""}${t.bathrooms?"/"+t.bathrooms+"BA":""}</td>
+      <td>${t.area?t.area+" sf":"-"}</td>
+      <td>${t.units!=null?t.units:"-"}</td>
+      <td class="price">${priceStr}</td>
+      <td>${takeupStr}</td>
+    </tr>`;
+  }).join("");
+  const brochure = detail.brochure_url
+    ? `<a class="brochure-link" href="${detail.brochure_url}" target="_blank" rel="noopener">View developer brochure (PDF)</a>`
+    : "";
+  return `${priceHero}
+    <h3>Unit Types & Pricing</h3>
+    <table class="unit-table">
+      <tr><th>Type</th><th>Area</th><th>Units</th><th>Price (RM)</th><th>Take-up</th></tr>
+      ${rows}
+    </table>
+    ${brochure}
+    <div style="font-size:10px;color:var(--muted);margin-top:6px">Source: TEDUH / KPKT official filing</div>`;
+}
+
 function showProject(proj){
   openPanel();
   const statusColors = {Lancar:"#dcfce7|#166534", Lewat:"#fef3c7|#92400e", Sakit:"#fee2e2|#991b1b", "Belum Mula":"#f3f4f6|#4b5563"};
@@ -967,6 +1028,7 @@ function showProject(proj){
       <div class="prop-cell"><div class="val">${proj.state||"—"}</div><div class="lbl">State</div></div>
       ${score!==null?`<div class="prop-cell"><div class="val" style="color:${scoreColor(score)}">${score}/100</div><div class="lbl">Area investment score</div></div>`:""}
     </div>
+    ${buildUnitSection(proj)}
     ${(proj.developer?.phone||proj.developer?.email||proj.developer?.website)?`
     <div class="prop-contact">
       <h3 style="margin-top:0">Developer Contact</h3>
