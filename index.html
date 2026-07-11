@@ -16,16 +16,58 @@
     --amber:#e0a422; --line:#e3ded4; --muted:#6b7a76;
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'IBM Plex Sans',sans-serif;color:var(--ink);background:var(--paper);height:100vh;display:flex;flex-direction:column}
-  header{padding:12px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--panel);gap:16px;flex-wrap:wrap}
-  header h1{font-family:'Archivo',sans-serif;font-weight:800;font-size:19px;letter-spacing:-0.02em}
-  header h1 span{color:var(--teal-4)}
-  header .right{display:flex;align-items:center;gap:14px}
-  header .src{font-size:11px;color:var(--muted)}
-  select{font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:7px 10px;border:1.5px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);cursor:pointer}
-  .wrap{flex:1;display:flex;min-height:0}
-  #map{flex:1;background:#e8efec}
-  aside{width:360px;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:20px}
+  body{font-family:'IBM Plex Sans',sans-serif;color:var(--ink);background:var(--paper);height:100vh;overflow:hidden}
+
+  /* Floating glassmorphic control bars - map is full-bleed, controls float on top */
+  .float-bar{
+    position:fixed; z-index:400;
+    background:rgba(255,255,255,0.78);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,0.5);
+    border-radius:14px;
+    box-shadow:0 10px 40px rgba(23,74,64,0.14), 0 1px 3px rgba(0,0,0,0.06);
+  }
+  #brandBar{
+    top:16px; left:16px;
+    padding:10px 16px;
+    display:flex; align-items:center; gap:8px;
+  }
+  #brandBar h1{font-family:'Archivo',sans-serif;font-weight:800;font-size:14px;letter-spacing:-0.01em;white-space:nowrap}
+  #brandBar h1 span{color:var(--teal-4)}
+  #controlBar{
+    top:16px; right:16px;
+    padding:8px 10px;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    max-width:calc(100vw - 32px);
+  }
+  #searchBar{
+    top:16px; left:50%; transform:translateX(-50%);
+    padding:2px;
+  }
+  @media(max-width:900px){
+    #brandBar{display:none}
+    #searchBar{left:16px;right:16px;transform:none;max-width:calc(100vw - 32px)}
+    #controlBar{top:auto;bottom:16px;left:16px;right:16px;justify-content:center}
+  }
+  header{display:none}
+  select{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 10px;border:1px solid rgba(0,0,0,0.06);border-radius:20px;background:rgba(255,255,255,0.5);color:var(--ink);cursor:pointer}
+  .wrap{position:fixed;inset:0;display:flex;min-height:0}
+  #map{flex:1;background:#e8efec;width:100%}
+  aside{
+    position:fixed; top:16px; right:16px; bottom:16px;
+    width:380px; max-width:calc(100vw - 32px);
+    background:rgba(255,255,255,0.92);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,0.5);
+    border-radius:16px;
+    box-shadow:0 20px 60px rgba(23,74,64,0.18);
+    overflow-y:auto; padding:24px;
+    z-index:300;
+    transform:translateX(420px); opacity:0;
+    transition:transform 0.4s cubic-bezier(.16,1,.3,1), opacity 0.4s ease;
+    pointer-events:none;
+  }
+  aside.open{transform:translateX(0); opacity:1; pointer-events:auto}
   aside .empty{color:var(--muted);font-size:14px;line-height:1.6;margin-top:8px}
   .dname{font-family:'Archivo',sans-serif;font-weight:800;font-size:26px;letter-spacing:-0.02em}
   .dsub{font-size:12px;color:var(--muted);margin-bottom:16px}
@@ -59,18 +101,16 @@
   .leaflet-interactive:focus-visible{outline:2px solid var(--amber)}
   @media(max-width:760px){
     body{overflow:hidden}
-    header{padding:10px 14px;flex-wrap:nowrap;gap:8px}
-    header h1{font-size:15px}
+    #brandBar{display:none}
+    #searchBar{top:12px;left:12px;right:12px;transform:none;max-width:calc(100vw - 24px)}
+    #controlBar{top:auto;bottom:12px;left:12px;right:12px;justify-content:center;flex-wrap:wrap}
     .layers{gap:4px}
     .chip{font-size:11px;padding:5px 8px;gap:4px}
     .chip .dot{width:6px;height:6px}
     select{font-size:12px;padding:5px 8px}
-    header .src{display:none}
-    .wrap{flex-direction:column;position:relative}
-    #map{flex:1;height:100%}
     aside{
-      position:fixed;bottom:0;left:0;right:0;
-      width:100%;max-height:80vh;
+      position:fixed;bottom:0;left:0;right:0;top:auto;
+      width:100%;max-width:100%;max-height:80vh;
       border-left:none;border-top:none;
       border-radius:16px 16px 0 0;
       box-shadow:0 -4px 24px rgba(0,0,0,.15);
@@ -78,8 +118,9 @@
       transition:transform .3s cubic-bezier(.32,.72,0,1);
       z-index:2000;overflow-y:auto;
       padding:0 20px 20px;
+      opacity:1;
     }
-    aside.open{transform:translateY(0)}
+    aside.open{transform:translateY(0);opacity:1}
     .panel-handle{
       display:flex;justify-content:center;align-items:center;
       height:24px;cursor:pointer;
@@ -103,7 +144,7 @@
   }
 
   .layers{display:flex;gap:6px}
-  .chip{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:6px 10px;border:1.5px solid var(--line);border-radius:20px;background:var(--paper);color:var(--muted);cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px}
+  .chip{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 12px;border:1px solid rgba(0,0,0,0.06);border-radius:20px;background:rgba(255,255,255,0.5);color:var(--muted);cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
   .chip .dot{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.5}
   .chip.on{background:var(--teal-5);color:#fff;border-color:var(--teal-5)}
   .chip.on .dot{opacity:1;background:#fff}
@@ -178,10 +219,11 @@
 
   /* Search box */
   .search-wrap{position:relative}
-  .search-wrap input{font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:7px 12px 7px 32px;
-    border:1.5px solid var(--line);border-radius:20px;background:var(--paper);color:var(--ink);
-    width:200px;outline:none}
-  .search-wrap input:focus{border-color:var(--teal-4);width:260px;transition:width .2s}
+  .search-wrap input{font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:9px 14px 9px 34px;
+    border:none;border-radius:20px;background:transparent;color:var(--ink);
+    width:240px;outline:none}
+  .search-wrap input:focus{width:300px;transition:width .2s}
+  .search-icon{left:14px!important}
   .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
   .search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--panel);
     border:1.5px solid var(--line);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);
@@ -242,25 +284,29 @@
   .price-range-hero .lbl{font-size:11px;opacity:0.85;margin-top:2px}
   .brochure-link{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--paper);border-radius:8px;margin-top:10px;text-decoration:none;color:var(--ink);font-size:13px;font-weight:600}
   .brochure-link:hover{background:var(--teal-1)}
+
+  .panel-close{position:absolute;top:20px;right:20px;width:28px;height:28px;border-radius:50%;
+    background:var(--paper);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-size:14px;color:var(--muted);z-index:10}
+  .panel-close:hover{background:var(--teal-1);color:var(--ink)}
 </style>
 </head>
 <body>
-<header>
+<div id="brandBar" class="float-bar">
   <h1>West Malaysia <span>District Explorer</span></h1>
-  <div class="right">
-    <div class="search-wrap">
+</div>
+<div id="searchBar" class="float-bar">
+  <div class="search-wrap">
     <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <input id="searchBox" type="text" placeholder="Search districts or projects…" autocomplete="off">
     <div class="search-results" id="searchResults"></div>
   </div>
-  <div class="layers">
-      <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit lines</span>
-      <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
-    </div>
-    <select id="stateSel"><option value="">All states</option></select>
-    <div class="src">DOSM 2024/25 &middot; OSM &middot; TEDUH KPKT</div>
-  </div>
-</header>
+</div>
+<div id="controlBar" class="float-bar">
+  <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit</span>
+  <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
+  <select id="stateSel"><option value="">All states</option></select>
+</div>
 <div class="wrap">
   <div id="map">
     <div class="legend"><b>Population (quintiles)</b><div class="grad"></div><div class="ends"><span id="lg-min"></span><span id="lg-max"></span></div><div class="note">Each shade = 20% of districts</div></div>
@@ -1105,6 +1151,7 @@ function renderDistrict(f){
       <div class="track"><div class="fill" style="width:${pct}%"></div></div></div>`;
   }).join("");
   document.getElementById("panel").innerHTML=`
+    <button class="panel-close" onclick="closePanel()">&times;</button>
     <div class="dname">${name}</div>
     <div class="dsub">${s.state} &middot; 2025 estimates</div>
     ${(()=>{
