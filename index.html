@@ -355,7 +355,7 @@ const color = p => RAMP[BREAKS.filter(b=>p>b).length];
 document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
-const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0.9, zoomSnap:0.25, zoomDelta:0.25, bounceAtZoomLimits:false, zoomControl:false});
+const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0.9, zoomSnap:0.5, zoomDelta:0.5, bounceAtZoomLimits:false, zoomControl:false, preferCanvas:true});
 L.control.zoom({position:"bottomleft"}).addTo(map);
 
 // Zoom toward cursor — clean version, no pan correction
@@ -517,6 +517,14 @@ const PROJECT_STATUS_COLORS = {
   if(pctSold!==null) nlTip += `<br>${nl.units_sold}/${nl.total_units} units sold (${pctSold}%)`;
   if(nl.launch_date) nlTip += `<br>Launched: ${nl.launch_date}`;
   m2.bindTooltip(nlTip, {sticky:true});
+  m2.bindPopup(`<div class="amen-pop"><div class="body">
+    <div class="name">${nl.name}</div>
+    <div class="kind">${tenureLabel}${nl.landed ? " · Landed" : ""}${nl.developer ? " &middot; "+nl.developer : ""}</div>
+    ${nl.price_min && nl.price_max ? `<div class="field"><b>Price</b>${rm(nl.price_min)} – ${rm(nl.price_max)}</div>` : ""}
+    ${pctSold!==null ? `<div class="field"><b>Units sold</b>${nl.units_sold}/${nl.total_units} (${pctSold}%)</div>` : ""}
+    ${nl.floor_min && nl.floor_max ? `<div class="field"><b>Floor size</b>${nl.floor_min}–${nl.floor_max} sq ft</div>` : ""}
+    ${nl.launch_date ? `<div class="field"><b>Launched</b>${nl.launch_date}</div>` : ""}
+  </div></div>`, {maxWidth: 280, minWidth: 240});
   amenityLayers.newlaunches.addLayer(m2);
 });
 // Zoom-based visibility: supermarkets only render at zoom >= 12 to prevent
