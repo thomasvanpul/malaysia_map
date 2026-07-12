@@ -153,6 +153,7 @@
   .chip.sup.on{background:#5f6f24;border-color:#5f6f24}
   .chip.transit.on{background:#333;border-color:#333}
   .chip.projects.on{background:#0369A1;border-color:#0369A1}
+  .chip.newlaunches.on{background:#e0a422;border-color:#e0a422}
   .chip.schools.on{background:#0369a1;border-color:#0369a1}
   .chip.hospitals.on{background:#be123c;border-color:#be123c}
   .amen-pop{font-family:'IBM Plex Sans',sans-serif;max-width:260px}
@@ -312,6 +313,7 @@
 <div id="controlBar" class="float-bar">
   <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit</span>
   <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
+  <span class="chip newlaunches" data-layer="newlaunches"><span class="dot"></span>New Launches</span>
   <select id="stateSel"><option value="">All states</option></select>
 </div>
 <div class="wrap">
@@ -336,6 +338,9 @@ catch(e) { console.warn('transit.json missing, skipping transit layer'); }
 let TEDUH = {projects:[]};
 try { TEDUH = await (await fetch('teduh_projects.json')).json(); }
 catch(e) { console.warn('teduh_projects.json missing, skipping projects layer'); }
+let NEWLAUNCHES = {projects:[]};
+try { NEWLAUNCHES = await (await fetch('developer_new_launches.json')).json(); }
+catch(e) { console.warn('developer_new_launches.json missing, skipping new launches layer'); }
 
 const ETH_LABELS = {bumi_malay:"Malay", bumi_other:"Other Bumiputera", chinese:"Chinese", indian:"Indian", other_citizen:"Other citizens", other_noncitizen:"Non-citizens"};
 const fmt = v => v>=1000 ? (v/1000).toFixed(2)+"M" : Math.round(v)+"k";
@@ -408,6 +413,24 @@ const amenityLayers = {
   }),
   schools: L.layerGroup(),
   hospitals: L.layerGroup(),
+  newlaunches: L.markerClusterGroup({
+    maxClusterRadius: 80,
+    disableClusteringAtZoom: 15,
+    chunkedLoading: false,
+    animate: false,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    iconCreateFunction: function(cluster){
+      const n = cluster.getChildCount();
+      const sz = n>50?52:n>20?44:36;
+      const col = "#e0a422";
+      return L.divIcon({
+        className:"",
+        html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?11:13}px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+        iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
+      });
+    }
+  }),
 };
 // Populate schools + hospitals
 (function(){
@@ -471,6 +494,30 @@ const PROJECT_STATUS_COLORS = {
   m.bindTooltip(tip, {sticky:true});
   m.on("click", (e)=>{L.DomEvent.stopPropagation(e); showProject(proj);});
   amenityLayers.projects.addLayer(m);
+});
+
+// New launches (Hock's dataset) — amber pin markers
+(NEWLAUNCHES.projects || []).forEach(nl => {
+  if(!nl.lat || !nl.lon) return;
+  if(nl.lat<1 || nl.lat>7.5 || nl.lon<99 || nl.lon>105.5) return;
+  const nlIcon = L.divIcon({
+    className:"",
+    iconSize:[24,32], iconAnchor:[12,32],
+    html:`<svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20c0-6.6-5.4-12-12-12z" fill="#e0a422" stroke="#fff" stroke-width="1.5"/>
+      <path d="M8 11l4-4 4 4v6a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-6z" fill="rgba(255,255,255,0.9)"/>
+    </svg>`
+  });
+  const m2 = L.marker([nl.lat, nl.lon], {icon: nlIcon});
+  const tenureLabel = nl.tenure === "fh" ? "Freehold" : nl.tenure === "lh" ? "Leasehold" : (nl.tenure || "");
+  const pctSold = nl.total_units ? Math.round((nl.units_sold/nl.total_units)*100) : null;
+  let nlTip = `<b>${nl.name}</b><br>${tenureLabel}${nl.landed ? " · Landed" : ""}`;
+  if(nl.developer) nlTip += `<br>${nl.developer}`;
+  if(nl.price_min && nl.price_max) nlTip += `<br>${rm(nl.price_min)} – ${rm(nl.price_max)}`;
+  if(pctSold!==null) nlTip += `<br>${nl.units_sold}/${nl.total_units} units sold (${pctSold}%)`;
+  if(nl.launch_date) nlTip += `<br>Launched: ${nl.launch_date}`;
+  m2.bindTooltip(nlTip, {sticky:true});
+  amenityLayers.newlaunches.addLayer(m2);
 });
 // Zoom-based visibility: supermarkets only render at zoom >= 12 to prevent
 // 3000-dot pile-up. When user has the "sup" chip on but is zoomed out, show
