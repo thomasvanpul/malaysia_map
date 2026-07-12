@@ -68,6 +68,13 @@
     pointer-events:none;
   }
   aside.open{transform:translateX(0); opacity:1; pointer-events:auto}
+  /* Custom scrollbar — default OS grey scrollbar visually pokes outside the panel's rounded
+     corners and clashes with the rest of the design system */
+  aside{scrollbar-width:thin; scrollbar-color:var(--teal-3) transparent}
+  aside::-webkit-scrollbar{width:8px}
+  aside::-webkit-scrollbar-track{background:transparent; margin:16px 0}
+  aside::-webkit-scrollbar-thumb{background:var(--teal-2); border-radius:8px; border:2px solid transparent; background-clip:padding-box}
+  aside::-webkit-scrollbar-thumb:hover{background:var(--teal-3); background-clip:padding-box}
   aside .empty{color:var(--muted);font-size:14px;line-height:1.6;margin-top:8px}
   .dname{font-family:'Archivo',sans-serif;font-weight:800;font-size:26px;letter-spacing:-0.02em}
   .dsub{font-size:12px;color:var(--muted);margin-bottom:16px}
@@ -448,7 +455,7 @@ L.control.zoom({position:"bottomleft"}).addTo(map);
     e.preventDefault();
     if(!gestureRect) gestureRect = c.getBoundingClientRect(); // only measure at gesture start
     point = {x: e.clientX - gestureRect.left, y: e.clientY - gestureRect.top};
-    const delta = -e.deltaY * (e.deltaMode === 1 ? 0.1 : e.deltaMode === 2 ? 1 : 0.01);
+    const delta = -e.deltaY * (e.deltaMode === 1 ? 0.07 : e.deltaMode === 2 ? 0.7 : 0.007);
     liveZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), (liveZoom !== null ? liveZoom : committedZoom) + delta));
     if(!raf) raf = requestAnimationFrame(paint);
     clearTimeout(settleTimer);
@@ -465,7 +472,7 @@ L.control.zoom({position:"bottomleft"}).addTo(map);
   }, {passive:false});
 })();
 L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
-  {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:6, updateWhenIdle:false}).addTo(map);
+  {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:8, updateWhenIdle:false, updateWhenZooming:false}).addTo(map);
 
 // Amenity layers - built once, toggled by chips
 const COLORS = {rail:"#174a40", mall:"#a94e2c", sup:"#5f6f24"};
@@ -597,11 +604,24 @@ const DISTRICT_BBOXES = DATA.features.map(f => {
   return {minLon, minLat, maxLon, maxLat, feature:f};
 });
 function isInsideAnyDistrict(lat, lon){
+  // Strict polygon-only was too aggressive: reclaimed land and small coastal parcels (e.g.
+  // Tanjong Tokong / Pulau Andaman area) aren't always covered by the district polygon dataset
+  // yet, so real properties there were getting excluded as if they were bad geocoding. Add a
+  // ~4km tolerance buffer around each district's bounding box as a fallback — genuinely wrong
+  // points (Sumatra, open ocean) are tens of km beyond any Malaysian district, so this buffer
+  // won't readmit those, but it will readmit real properties sitting just outside an imprecise
+  // or incomplete polygon edge.
+  const BUFFER = 0.04;
+  let nearAnyDistrict = false;
   for(const b of DISTRICT_BBOXES){
-    if(lon<b.minLon || lon>b.maxLon || lat<b.minLat || lat>b.maxLat) continue;
-    if(pointInGeom(lon, lat, b.feature.geometry)) return true;
+    if(lon>=b.minLon && lon<=b.maxLon && lat>=b.minLat && lat<=b.maxLat){
+      if(pointInGeom(lon, lat, b.feature.geometry)) return true;
+      nearAnyDistrict = true;
+    } else if(lon>=b.minLon-BUFFER && lon<=b.maxLon+BUFFER && lat>=b.minLat-BUFFER && lat<=b.maxLat+BUFFER){
+      nearAnyDistrict = true;
+    }
   }
-  return false;
+  return nearAnyDistrict;
 }
 (TEDUH.projects || []).forEach(proj => {
   if(!proj.lat || !proj.lon) return;
@@ -1045,10 +1065,15 @@ const sel = document.getElementById("stateSel");
 Object.keys(stateLayers).sort().forEach(st=>{
   const o=document.createElement("option"); o.value=o.textContent=st; sel.appendChild(o);
 });
+let highlightedStateLayers = [];
 sel.onchange = ()=>{
+  highlightedStateLayers.forEach(l=>layer.resetStyle(l));
+  highlightedStateLayers = [];
   if(!sel.value){ map.fitBounds(layer.getBounds().pad(0.03)); return; }
   const g = L.featureGroup(stateLayers[sel.value]);
   map.fitBounds(g.getBounds().pad(0.06));
+  highlightedStateLayers = stateLayers[sel.value];
+  highlightedStateLayers.forEach(l=>l.setStyle({stroke:true, weight:2, color:"#e0a422"}));
 };
 
 function onClick(f,l){
