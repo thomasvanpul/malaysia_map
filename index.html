@@ -357,6 +357,8 @@
   <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit</span>
   <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
   <span class="chip newlaunches" data-layer="newlaunches"><span class="dot"></span>New Launches</span>
+  <span class="chip schools" data-layer="schools"><span class="dot"></span>Schools</span>
+  <span class="chip hospitals" data-layer="hospitals"><span class="dot"></span>Hospitals</span>
   <select id="stateSel"><option value="">All states</option></select>
 </div>
 <div class="wrap">
@@ -504,8 +506,26 @@ const amenityLayers = {
       });
     }
   }),
-  schools: L.layerGroup(),
-  hospitals: L.layerGroup(),
+  schools: L.markerClusterGroup({
+    maxClusterRadius: 60, disableClusteringAtZoom: 15, chunkedLoading: true, animate: false,
+    spiderfyOnMaxZoom: true, showCoverageOnHover: false,
+    iconCreateFunction: function(cluster){
+      const n = cluster.getChildCount();
+      const sz = n>50?46:n>20?38:30;
+      return L.divIcon({className:"", html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:#0369a1;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?10:12}px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+        iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]});
+    }
+  }),
+  hospitals: L.markerClusterGroup({
+    maxClusterRadius: 60, disableClusteringAtZoom: 15, chunkedLoading: true, animate: false,
+    spiderfyOnMaxZoom: true, showCoverageOnHover: false,
+    iconCreateFunction: function(cluster){
+      const n = cluster.getChildCount();
+      const sz = n>50?46:n>20?38:30;
+      return L.divIcon({className:"", html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:#be123c;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?10:12}px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+        iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]});
+    }
+  }),
   newlaunches: L.markerClusterGroup({
     maxClusterRadius: 80,
     disableClusteringAtZoom: 13,
@@ -667,14 +687,7 @@ function isInsideAnyDistrict(lat, lon){
   if(pctSold!==null) nlTip += `<br>${nl.units_sold}/${nl.total_units} units sold (${pctSold}%)`;
   if(nl.launch_date) nlTip += `<br>Launched: ${nl.launch_date}`;
   m2.bindTooltip(nlTip, {sticky:true});
-  m2.bindPopup(`<div class="amen-pop"><div class="body">
-    <div class="name">${nl.name}</div>
-    <div class="kind">${tenureLabel}${nl.landed ? " · Landed" : ""}${nl.developer ? " &middot; "+nl.developer : ""}</div>
-    ${nl.price_min && nl.price_max ? `<div class="field"><b>Price</b>${rm(nl.price_min)} – ${rm(nl.price_max)}</div>` : ""}
-    ${pctSold!==null ? `<div class="field"><b>Units sold</b>${nl.units_sold}/${nl.total_units} (${pctSold}%)</div>` : ""}
-    ${nl.floor_min && nl.floor_max ? `<div class="field"><b>Floor size</b>${nl.floor_min}–${nl.floor_max} sq ft</div>` : ""}
-    ${nl.launch_date ? `<div class="field"><b>Launched</b>${nl.launch_date}</div>` : ""}
-  </div></div>`, {maxWidth: 280, minWidth: 240});
+  m2.bindPopup(newLaunchPopupHTML(nl), {maxWidth: 280, minWidth: 240});
   amenityLayers.newlaunches.addLayer(m2);
 });
 // Zoom-based visibility: supermarkets only render at zoom >= 12 to prevent
@@ -987,10 +1000,28 @@ map.fitBounds(layer.getBounds().pad(0.03));
           sub:f.properties.shapeName, latlng:[p.lat,p.lon]});
       });
     });
+    // Schools, hospitals, malls
+    DATA.features.forEach(f=>{
+      const a = f.properties.stats.amenities||{};
+      (a.school_points||[]).forEach(p=>{
+        if(p.name) idx.push({type:"School", label:p.name, sub:f.properties.shapeName, latlng:[p.lat,p.lon]});
+      });
+      (a.hospital_points||[]).forEach(p=>{
+        if(p.name) idx.push({type:"Hospital", label:p.name, sub:f.properties.shapeName, latlng:[p.lat,p.lon]});
+      });
+      (a.mall_points||[]).forEach(p=>{
+        if(p.name) idx.push({type:"Mall", label:p.name, sub:f.properties.shapeName, latlng:[p.lat,p.lon]});
+      });
+    });
     // TEDUH projects
     (TEDUH.projects||[]).forEach(p=>{
       if(p.name) idx.push({type:"Project", label:p.name,
         sub:(p.developer?.name||p.state||""), latlng:(p.lat&&p.lon?[p.lat,p.lon]:null)});
+    });
+    // New launches
+    (NEWLAUNCHES.projects||[]).forEach(p=>{
+      if(p.name) idx.push({type:"New Launch", label:p.name,
+        sub:(p.developer||""), latlng:(p.lat&&p.lon?[p.lat,p.lon]:null)});
     });
     return idx;
   }
@@ -1025,6 +1056,10 @@ map.fitBounds(layer.getBounds().pad(0.03));
           const fullProj = (TEDUH.projects||[]).find(p=>p.name===item.label);
           if(item.latlng) map.setView(item.latlng, 15);
           if(fullProj) showProject(fullProj);
+        } else if(item.type==="New Launch"){
+          const fullNl = (NEWLAUNCHES.projects||[]).find(p=>p.name===item.label);
+          if(fullNl) showNewLaunchBrief(fullNl);
+          else if(item.latlng) map.setView(item.latlng, 15);
         } else if(item.latlng){
           map.setView(item.latlng, 14);
         }
@@ -1050,12 +1085,14 @@ function openPanel(){ panel.classList.add("open"); }
 function closePanel(){
   panel.classList.remove("open");
   if(selectedProjectMarker){ map.removeLayer(selectedProjectMarker); selectedProjectMarker = null; }
+  clearNearbyProperties();
 }
 function resetPanelToBrowse(){
   document.getElementById("panel").innerHTML = '<div class="panel-handle" id="panelHandle"></div><div class="panel-peek" id="panelPeek">Browse districts</div><div class="empty">Click a district to explore its data.</div>';
   const h = document.getElementById("panelHandle");
   if(h) h.addEventListener("click", () => document.getElementById("panel").classList.toggle("open"));
   if(selectedProjectMarker){ map.removeLayer(selectedProjectMarker); selectedProjectMarker = null; }
+  clearNearbyProperties();
 }
 function setPeek(text){ if(peek) peek.textContent = text; }
 if(handle) handle.addEventListener("click", ()=> panel.classList.toggle("open"));
@@ -1231,6 +1268,83 @@ function collectAllAmenities(){
   });
   return {malls, stations, schools, hospitals};
 }
+function newLaunchPopupHTML(nl){
+  const tenureLabel = nl.tenure === "fh" ? "Freehold" : nl.tenure === "lh" ? "Leasehold" : (nl.tenure || "");
+  const pctSold = nl.total_units ? Math.round((nl.units_sold/nl.total_units)*100) : null;
+  return `<div class="amen-pop"><div class="body">
+    <div class="name">${nl.name}</div>
+    <div class="kind">${tenureLabel}${nl.landed ? " · Landed" : ""}${nl.developer ? " &middot; "+nl.developer : ""}</div>
+    ${nl.price_min && nl.price_max ? `<div class="field"><b>Price</b>${rm(nl.price_min)} – ${rm(nl.price_max)}</div>` : ""}
+    ${pctSold!==null ? `<div class="field"><b>Units sold</b>${nl.units_sold}/${nl.total_units} (${pctSold}%)</div>` : ""}
+    ${nl.floor_min && nl.floor_max ? `<div class="field"><b>Floor size</b>${nl.floor_min}–${nl.floor_max} sq ft</div>` : ""}
+    ${nl.launch_date ? `<div class="field"><b>Launched</b>${nl.launch_date}</div>` : ""}
+  </div></div>`;
+}
+function showNewLaunchBrief(p){
+  jumpToPoint(p.lat, p.lon, 16);
+  L.popup({maxWidth:280, minWidth:240})
+    .setLatLng([p.lat, p.lon])
+    .setContent(newLaunchPopupHTML(p))
+    .openOn(map);
+}
+function nearbyPropertiesFor(proj, radiusKm){
+  const teduh = (TEDUH.projects||[]).map(p=>({...p, __kind:"teduh"}));
+  const newl = (NEWLAUNCHES.projects||[]).map(p=>({...p, __kind:"newlaunch"}));
+  return [...teduh, ...newl]
+    .filter(p => p.lat && p.lon && p.name)
+    .filter(p => {
+      // Same development often appears in both TEDUH and Hock's dataset with slightly
+      // different geocoded coordinates AND different capitalization (seen: "TAMAN NIBONG
+      // AZ-ZAHRA" vs "Taman Nibong Az-zahra") — compare case-insensitively with a generous
+      // distance tolerance, otherwise a property shows up as "nearby" to itself.
+      if(p.name.trim().toLowerCase() !== (proj.name||"").trim().toLowerCase()) return true;
+      return haversineKm(p.lat, p.lon, proj.lat, proj.lon) > 0.5;
+    })
+    .map(p => ({...p, km: haversineKm(proj.lat, proj.lon, p.lat, p.lon)}))
+    .filter(p => p.km <= radiusKm)
+    .sort((a,b)=>a.km-b.km);
+}
+let nearbyPropertiesLayer = L.layerGroup();
+let nearbyPropertiesVisible = false;
+function renderNearbyPropertyMarkers(){
+  nearbyPropertiesLayer.clearLayers();
+  if(!currentRadiusProj) return;
+  const radiusEl = document.getElementById("radiusVal");
+  const radiusKm = radiusEl ? parseFloat(radiusEl.textContent) : 3;
+  nearbyPropertiesFor(currentRadiusProj, radiusKm).slice(0, 40).forEach(p=>{
+    const color = p.__kind === "newlaunch" ? "#e0a422" : (PROJECT_STATUS_COLORS[p.status] || "#0369A1");
+    const m = L.circleMarker([p.lat, p.lon], {radius:7, color:"#fff", weight:2, fillColor:color, fillOpacity:0.95});
+    let tip = `<b>${p.name}</b>`;
+    if(p.__kind==="newlaunch"){
+      if(p.price_min && p.price_max) tip += `<br>RM ${Number(p.price_min).toLocaleString()} – RM ${Number(p.price_max).toLocaleString()}`;
+      if(p.tenure) tip += `<br>${p.tenure==="fh"?"Freehold":p.tenure==="lh"?"Leasehold":p.tenure}`;
+    } else {
+      if(p.status) tip += `<br>${p.status}`;
+      if(p.developer?.name) tip += `<br>${p.developer.name}`;
+    }
+    tip += `<br><span style="color:#6b7a76;font-size:11px">${fmtDist(p.km)} away</span>`;
+    m.bindTooltip(tip, {sticky:true});
+    m.on("click", ()=> { if(p.__kind === "newlaunch") showNewLaunchBrief(p); else showProject(p); });
+    nearbyPropertiesLayer.addLayer(m);
+  });
+}
+function toggleNearbyProperties(){
+  nearbyPropertiesVisible = !nearbyPropertiesVisible;
+  const btn = document.getElementById("unhideNearbyBtn");
+  if(nearbyPropertiesVisible){
+    renderNearbyPropertyMarkers();
+    nearbyPropertiesLayer.addTo(map);
+    if(btn) btn.textContent = "🙈 Hide these on the map";
+  } else {
+    map.removeLayer(nearbyPropertiesLayer);
+    if(btn) btn.textContent = "👁 Show these on the map";
+  }
+}
+function clearNearbyProperties(){
+  nearbyPropertiesVisible = false;
+  map.removeLayer(nearbyPropertiesLayer);
+  nearbyPropertiesLayer.clearLayers();
+}
 
 function renderNearbyList(proj, radiusKm){
   const all = collectAllAmenities();
@@ -1246,10 +1360,22 @@ function renderNearbyList(proj, radiusKm){
   const nm = within(all.malls);
   const nsc = within(all.schools);
   const nh = within(all.hospitals);
+  const np = nearbyPropertiesFor(proj, radiusKm).slice(0, 8);
 
   function rowHTML(items, emoji, kind){
     return items.map(function(p){
       return `<div class="proj-item nearby-item" style="padding:6px 0;position:relative" onclick="jumpToPoint(${p.lat},${p.lon},16)" onmouseenter="showNearbyHover(this,'${(p.name||"").replace(/'/g,"&#39;")}','${kind}','${fmtDist(p.km)}')" onmouseleave="hideNearbyHover(this)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px">${emoji} ${p.name}</span>
+          <span style="font-size:11px;color:var(--muted);background:var(--panel);padding:2px 6px;border-radius:8px">${fmtDist(p.km)}</span>
+        </div></div>`;
+    }).join("");
+  }
+  function propertyRowHTML(items){
+    return items.map(function(p){
+      const kind = p.__kind==="newlaunch" ? "New launch" : (p.status||"Project");
+      const emoji = p.__kind==="newlaunch" ? "🏗️" : "🏘️";
+      return `<div class="proj-item nearby-item" style="padding:6px 0;position:relative" onclick="openNearbyProp('${p.name.replace(/'/g,"&#39;")}',${p.lat},${p.lon})" onmouseenter="showNearbyHover(this,'${p.name.replace(/'/g,"&#39;")}','${kind}','${fmtDist(p.km)}')" onmouseleave="hideNearbyHover(this)">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:13px">${emoji} ${p.name}</span>
           <span style="font-size:11px;color:var(--muted);background:var(--panel);padding:2px 6px;border-radius:8px">${fmtDist(p.km)}</span>
@@ -1265,11 +1391,30 @@ function renderNearbyList(proj, radiusKm){
   } else {
     listEl.innerHTML = rowHTML(ns,"🚆","Rail station") + rowHTML(nm,"🛒","Mall") + rowHTML(nsc,"🎓","School") + rowHTML(nh,"🏥","Hospital");
   }
+  const propListEl = document.getElementById("nearbyPropList");
+  if(propListEl){
+    window.__nearbyPropRefs = np;
+    propListEl.innerHTML = np.length
+      ? propertyRowHTML(np)
+      : `<div style="font-size:12px;color:var(--muted);padding:8px 0">No other properties within ${radiusKm.toFixed(1)}km.</div>`;
+  }
 
   if(radiusCircle) map.removeLayer(radiusCircle);
   radiusCircle = L.circle([proj.lat, proj.lon], {
     radius: radiusKm*1000, color:"#2e7364", weight:2.5, fillColor:"#5ba392", fillOpacity:0.16, dashArray:"6,6"
   }).addTo(map);
+  if(nearbyPropertiesVisible) renderNearbyPropertyMarkers();
+}
+function nearbyPropByRef(name, lat, lon){
+  return (window.__nearbyPropRefs||[]).find(p=>p.name===name && p.lat===lat && p.lon===lon) || {name, lat, lon};
+}
+function openNearbyProp(name, lat, lon){
+  const p = nearbyPropByRef(name, lat, lon);
+  // showProject() is built around TEDUH's data shape (status, developer.name, etc.) and
+  // renders broken "undefined" fields for Hock's new-launches schema (tenure, developer as
+  // a plain string, no status) — route new-launch items to the lightweight popup instead.
+  if(p.__kind === "newlaunch") showNewLaunchBrief(p);
+  else showProject(p);
 }
 
 function onRadiusChange(val){
@@ -1281,6 +1426,7 @@ function onRadiusChange(val){
 function buildNearby(proj){
   if(!proj.lat||!proj.lon) return "";
   currentRadiusProj = proj;
+  nearbyPropertiesVisible = false;
   const defaultRadius = 3;
   setTimeout(function(){ renderNearbyList(proj, defaultRadius); }, 50);
   return `<h3>Nearby</h3>
@@ -1288,7 +1434,10 @@ function buildNearby(proj){
       <div class="rlabel"><span>Search radius</span><span id="radiusVal">${defaultRadius.toFixed(1)} km</span></div>
       <input type="range" min="0.5" max="10" step="0.5" value="${defaultRadius}" oninput="onRadiusChange(this.value)">
     </div>
-    <div class="proj-list" id="nearbyList" style="margin-top:4px"></div>`;
+    <div class="proj-list" id="nearbyList" style="margin-top:4px"></div>
+    <h3 style="margin-top:16px">Other properties nearby</h3>
+    <button class="cmp-btn" id="unhideNearbyBtn" style="margin-top:0" onclick="toggleNearbyProperties()">👁️ Show these on the map</button>
+    <div class="proj-list" id="nearbyPropList" style="margin-top:8px"></div>`;
 }
 
 const GOOGLE_SV_KEY = "AIzaSyCYA2qvGMJ0_EDbfxd15KPOQkGdrodzxrU";
@@ -1410,6 +1559,7 @@ function showProject(proj){
   if(panelEl) panelEl.scrollTop = 0;
   if(proj.lat && proj.lon) map.setView([proj.lat, proj.lon], 15);
   if(selectedProjectMarker){ map.removeLayer(selectedProjectMarker); selectedProjectMarker = null; }
+  clearNearbyProperties();
   if(proj.lat && proj.lon){
     selectedProjectMarker = L.marker([proj.lat, proj.lon], {
       icon: L.divIcon({className:"", iconSize:[34,34], iconAnchor:[17,17], html:'<div class="selected-project-ring"></div>'}),
@@ -1695,6 +1845,11 @@ window.amenityLayers = amenityLayers;
 window.TEDUH = TEDUH;
 window.NEWLAUNCHES = NEWLAUNCHES;
 window.isInsideAnyDistrict = isInsideAnyDistrict;
+window.toggleNearbyProperties = toggleNearbyProperties;
+window.nearbyPropByRef = nearbyPropByRef;
+window.openNearbyProp = openNearbyProp;
+window.showNewLaunchBrief = showNewLaunchBrief;
+window.showProject = showProject;
 
 }
 main().catch(e=>{
