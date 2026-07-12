@@ -194,10 +194,10 @@
   .score-label b{font-family:'Archivo',sans-serif;font-size:14px;display:block}
   .score-label small{font-size:11px;color:var(--muted)}
   .score-factors{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
-  .sf{background:var(--paper);border-radius:6px;padding:8px 10px}
+  .sf{background:var(--teal-1);border-radius:6px;padding:8px 10px}
   .sf .n{font-family:'Archivo',sans-serif;font-weight:700;font-size:15px}
   .sf .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
-  .calc-wrap{background:var(--paper);border-radius:8px;padding:14px;margin-top:6px}
+  .calc-wrap{background:var(--teal-1);border-radius:8px;padding:14px;margin-top:6px}
   .calc-wrap h4{font-family:'Archivo',sans-serif;font-size:13px;font-weight:700;margin-bottom:10px}
   .calc-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
   .calc-row label{font-size:12px;color:var(--muted);flex:1}
@@ -242,7 +242,7 @@
   @media(max-width:760px){.search-wrap input{width:140px}.search-wrap input:focus{width:180px}}
 
   /* Property detail panel */
-  .prop-header{background:var(--teal-5);color:#fff;margin:-20px -20px 16px;padding:20px;position:relative}
+  .prop-header{background:var(--teal-5);color:#fff;margin:-24px -24px 16px;padding:20px 24px;position:relative;border-radius:16px 16px 0 0}
   .prop-header .back{position:absolute;top:14px;right:14px;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif}
   .prop-header .back:hover{background:rgba(255,255,255,.35)}
   .prop-status{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em}
@@ -251,7 +251,7 @@
   .prop-photo{width:100%;height:160px;object-fit:cover;border-radius:8px;margin-bottom:14px;background:#e3ded4;display:block}
   .prop-photo-placeholder{width:100%;height:120px;background:linear-gradient(135deg,var(--teal-1),var(--teal-2));border-radius:8px;margin-bottom:14px;display:flex;align-items:center;justify-content:center;color:var(--teal-5);font-size:12px;font-weight:600}
   .prop-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
-  .prop-cell{background:var(--paper);border-radius:8px;padding:10px 12px}
+  .prop-cell{background:var(--teal-1);border-radius:8px;padding:10px 12px}
   .prop-cell .val{font-family:'Archivo',sans-serif;font-weight:700;font-size:16px;color:var(--ink)}
   .prop-cell .lbl{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:2px}
   .prop-contact{border-top:1px solid var(--line);padding-top:14px;margin-top:4px}
@@ -275,7 +275,7 @@
   .score-factor .pts{font-size:11px;color:var(--muted);font-weight:500}
 
   .unit-cards{margin-top:10px;display:flex;flex-direction:column;gap:8px}
-  .unit-card{background:var(--paper);border-radius:10px;padding:12px 14px}
+  .unit-card{background:var(--teal-1);border-radius:10px;padding:12px 14px}
   .unit-card-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
   .unit-type{font-family:'Archivo',sans-serif;font-weight:700;font-size:13px;line-height:1.35}
   .unit-price{font-weight:700;color:var(--teal-5);font-size:13px;white-space:nowrap}
@@ -284,7 +284,7 @@
   .takeup-bar{width:60px;height:6px;background:var(--teal-1);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:6px}
   .takeup-fill{height:100%;background:var(--teal-4)}
   .hover-preview-card{
-    position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:50;
+    position:absolute; left:8px; right:8px; top:calc(100% + 4px); z-index:50;
     background:#fff; border:1px solid var(--line); border-radius:10px;
     box-shadow:0 12px 30px rgba(23,74,64,0.18); padding:12px 14px;
     animation:hpcIn 0.12s ease-out;
@@ -307,20 +307,20 @@
   .price-range-hero{background:var(--teal-5);color:#fff;border-radius:10px;padding:14px 16px;margin:12px 0;text-align:center}
   .price-range-hero .amt{font-family:'Archivo',sans-serif;font-weight:800;font-size:20px}
   .price-range-hero .lbl{font-size:11px;opacity:0.85;margin-top:2px}
-  .brochure-link{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--paper);border-radius:8px;margin-top:10px;text-decoration:none;color:var(--ink);font-size:13px;font-weight:600}
-  .brochure-link:hover{background:var(--teal-1)}
+  .brochure-link{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--teal-1);border-radius:8px;margin-top:10px;text-decoration:none;color:var(--ink);font-size:13px;font-weight:600}
+  .brochure-link:hover{background:var(--teal-2)}
 
   .panel-close{position:absolute;top:20px;right:20px;width:28px;height:28px;border-radius:50%;
     background:var(--paper);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
     font-size:14px;color:var(--muted);z-index:10}
   .panel-close:hover{background:var(--teal-1);color:var(--ink)}
 
-  .radius-control{background:var(--paper);border-radius:8px;padding:12px 14px;margin:10px 0}
+  .radius-control{background:var(--teal-1);border-radius:8px;padding:12px 14px;margin:10px 0}
   .radius-control .rlabel{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:8px}
   .radius-control .rlabel span:last-child{color:var(--teal-5);font-family:'Archivo',sans-serif}
   .radius-control input[type=range]{width:100%;accent-color:var(--teal-4)}
   .nearby-item{cursor:pointer;transition:background 0.15s}
-  .nearby-item:hover{background:var(--teal-1);margin:0 -8px;padding:6px 8px!important;border-radius:6px}
+  .nearby-item:hover{background:#fff;margin:0 -8px;padding:6px 8px!important;border-radius:6px}
 </style>
 </head>
 <body>
@@ -341,9 +341,8 @@
   <select id="stateSel"><option value="">All states</option></select>
 </div>
 <div class="wrap">
-  <div id="map">
-    <div class="legend"><b>Population (quintiles)</b><div class="grad"></div><div class="ends"><span id="lg-min"></span><span id="lg-max"></span></div><div class="note">Each shade = 20% of districts</div></div>
-  </div>
+  <div id="map"></div>
+  <div class="legend"><b>Population (quintiles)</b><div class="grad"></div><div class="ends"><span id="lg-min"></span><span id="lg-max"></span></div><div class="note">Each shade = 20% of districts</div></div>
   <aside id="panel">
     <div class="panel-handle" id="panelHandle"></div>
     <div class="panel-peek" id="panelPeek">Click a district to explore</div>
@@ -389,6 +388,14 @@ const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0
 // of it at the root, rather than patching each broken button one at a time.
 window.map = map;
 L.control.zoom({position:"bottomleft"}).addTo(map);
+// Move Leaflet's control container (zoom buttons, attribution) OUT of #map so it isn't
+// affected by the live CSS scale transform applied to #map during scroll-zoom below —
+// otherwise the zoom buttons and legend visibly grow/shrink with the map, which they
+// should never do since they're fixed UI chrome, not map content.
+(function(){
+  const controlContainer = map.getContainer().querySelector(".leaflet-control-container");
+  if(controlContainer) map.getContainer().parentNode.appendChild(controlContainer);
+})();
 
 // Zoom toward cursor — GPU-composited live preview + single commit on settle
 (function(){
@@ -660,6 +667,11 @@ function nearestRoute(lat,lon){
   return bestD<0.04?best:null;
 }
 const routePolylines={};
+const allTransitCasings=[];
+const allTransitMains=[];
+function transitLineWeights(z){
+  return { casing: z<8?0:z<11?3:6, main: z<8?2:z<11?3:4.5 };
+}
 let prevHL=null;
 
 (TRANSIT.routes||[]).forEach(route=>{
@@ -669,17 +681,25 @@ let prevHL=null;
     if(chain.length<2)return;
     const ll=chain.map(([lon,lat])=>[lat,lon]);
     // White casing for separation from basemap
-    const z0=map.getZoom();
-    const cw=z0<8?0:z0<11?3:6;
-    if(cw>0) amenityLayers.transit.addLayer(L.polyline(ll,{color:"#fff",weight:cw+3,opacity:0.85,lineCap:"round",lineJoin:"round",interactive:false}));
-    const lw=map.getZoom()<8?2:map.getZoom()<11?3:4.5;
-    const line=L.polyline(ll,{color,weight:lw,opacity:1,lineCap:"round",lineJoin:"round"});
+    const w=transitLineWeights(map.getZoom());
+    if(w.casing>0){
+      const casing=L.polyline(ll,{color:"#fff",weight:w.casing+3,opacity:0.85,lineCap:"round",lineJoin:"round",interactive:false});
+      amenityLayers.transit.addLayer(casing);
+      allTransitCasings.push(casing);
+    }
+    const line=L.polyline(ll,{color,weight:w.main,opacity:1,lineCap:"round",lineJoin:"round"});
     line.bindTooltip(`<b style="color:${color}">${route.name}</b>${route.ref?" ("+route.ref+")":""}`,{sticky:true});
     line.on("click",function(e){L.DomEvent.stopPropagation(e);selectRoute(route,color);});
     amenityLayers.transit.addLayer(line);
     polys.push(line);
+    allTransitMains.push(line);
   });
   routePolylines[route.name]=polys;
+});
+map.on("zoomend", function(){
+  const w=transitLineWeights(map.getZoom());
+  allTransitCasings.forEach(l=>l.setStyle({weight:w.casing+3}));
+  allTransitMains.forEach(l=>l.setStyle({weight:w.main}));
 });
 
 // Stations: always visible as small circleMarkers on transit layer
@@ -852,7 +872,7 @@ let selected=null, compareMode=false, compareFirst=null;
 const stateLayers = {};
 
 const layer = L.geoJSON(DATA,{
-  style: f => ({fillColor:color(f.properties.stats.total), fillOpacity:.7, stroke:false}),
+  style: f => ({fillColor:color(f.properties.stats.total), fillOpacity:.5, stroke:false}),
   onEachFeature:(f,l)=>{
     const st = f.properties.stats.state;
     (stateLayers[st] = stateLayers[st] || []).push(l);
@@ -972,7 +992,7 @@ function onClick(f,l){
   }
   if(selected) layer.resetStyle(selected);
   selected=l;
-  l.setStyle({stroke:true,weight:3,color:"#e0a422",fillOpacity:0.45});
+  l.setStyle({stroke:true,weight:3,color:"#e0a422",fillOpacity:0.28});
   map.fitBounds(l.getBounds().pad(0.15), {maxZoom:13});
   renderDistrict(f);
 }
@@ -1155,7 +1175,7 @@ function renderNearbyList(proj, radiusKm){
 
   if(radiusCircle) map.removeLayer(radiusCircle);
   radiusCircle = L.circle([proj.lat, proj.lon], {
-    radius: radiusKm*1000, color:"#2e7364", weight:1.5, fillColor:"#5ba392", fillOpacity:0.08, dashArray:"4,4"
+    radius: radiusKm*1000, color:"#2e7364", weight:2.5, fillColor:"#5ba392", fillOpacity:0.16, dashArray:"6,6"
   }).addTo(map);
 }
 
@@ -1293,6 +1313,9 @@ function buildUnitSection(proj){
 
 function showProject(proj){
   openPanel();
+  const panelEl = document.getElementById("panel");
+  if(panelEl) panelEl.scrollTop = 0;
+  if(proj.lat && proj.lon) map.setView([proj.lat, proj.lon], 15);
   const statusColors = {Lancar:"#dcfce7|#166534", Lewat:"#fef3c7|#92400e", Sakit:"#fee2e2|#991b1b", "Belum Mula":"#f3f4f6|#4b5563"};
   const [bg,fg] = (statusColors[proj.status]||"#f3f4f6|#4b5563").split("|");
   const headerBg = {Lancar:"var(--teal-5)", Lewat:"#b45309", Sakit:"#991b1b", "Belum Mula":"#374151"}[proj.status]||"var(--teal-5)";
@@ -1310,7 +1333,7 @@ function showProject(proj){
 
   document.getElementById("panel").innerHTML=`
     <div class="prop-header" style="background:${headerBg}">
-      <button class="back" onclick="resetPanelToBrowse()">✕ Close</button>
+      <button class="back" onclick="closePanel()">✕ Close</button>
       <span class="prop-status" style="background:${bg};color:${fg}">${proj.status}</span>
       <div class="prop-name">${proj.name||"Unnamed Project"}</div>
       <div class="prop-dev">${proj.developer?.name||""}</div>
@@ -1331,7 +1354,7 @@ function showProject(proj){
       ${proj.developer?.email?`<a class="clink" href="mailto:${proj.developer.email}"><span>✉️ Email</span>${proj.developer.email}</a>`:""}
       ${proj.developer?.website?`<a class="clink" href="${proj.developer.website}" target="_blank"><span>🌐 Website</span>${proj.developer.website.replace(/^https?:\/\//,"")}</a>`:""}
     </div>`:""}
-    ${proj.developer?.address?`<div class="field" style="margin-top:12px"><b>Address</b><div style="margin-top:4px;line-height:1.5">${formatAddress(proj.developer.address)}</div></div>`:""}
+    ${proj.developer?.address?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><h3 style="margin:0 0 6px">Address</h3><div style="font-size:13px;color:var(--ink);line-height:1.5">${formatAddress(proj.developer.address)}</div></div>`:""}
     ${proj.lat&&proj.lon?`<button class="cmp-btn" style="margin-top:16px" onclick="map.setView([${proj.lat},${proj.lon}],15)">📍 Show on map</button>`:""}
     ${(function(){
       const sim=(TEDUH.projects||[]).filter(function(p){return p.status===proj.status&&p.state===proj.state&&p.name!==proj.name;}).slice(0,4);
@@ -1372,6 +1395,7 @@ function showProject(proj){
 
   const h=document.getElementById("panelHandle");
   if(h)h.addEventListener("click",()=>document.getElementById("panel").classList.toggle("open"));
+  if(panelEl) panelEl.scrollTop = 0;
 }
 
 function buildProjectList(state){
