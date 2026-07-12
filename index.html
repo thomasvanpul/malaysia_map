@@ -251,6 +251,8 @@
   .prop-photo{width:100%;height:160px;object-fit:cover;border-radius:8px;margin-bottom:14px;background:#e3ded4;display:block}
   .prop-photo-placeholder{width:100%;height:120px;background:linear-gradient(135deg,var(--teal-1),var(--teal-2));border-radius:8px;margin-bottom:14px;display:flex;align-items:center;justify-content:center;color:var(--teal-5);font-size:12px;font-weight:600}
   .prop-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .prop-grid .prop-cell:last-child:nth-child(odd){grid-column:1 / -1}
+  .score-factors .sf:last-child:nth-child(odd){grid-column:1 / -1}
   .prop-cell{background:var(--teal-1);border-radius:8px;padding:10px 12px}
   .prop-cell .val{font-family:'Archivo',sans-serif;font-weight:700;font-size:16px;color:var(--ink)}
   .prop-cell .lbl{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:2px}
@@ -300,6 +302,16 @@
     0%{transform:scale(0.4);opacity:0}
     30%{opacity:1}
     100%{transform:scale(1.6);opacity:0}
+  }
+  .selected-project-ring{
+    width:34px;height:34px;border-radius:50%;
+    border:3px solid #174a40;
+    box-shadow:0 0 0 3px #fff, 0 0 0 6px rgba(23,74,64,0.35);
+    animation:selectedPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes selectedPulse{
+    0%,100%{box-shadow:0 0 0 3px #fff, 0 0 0 6px rgba(23,74,64,0.35)}
+    50%{box-shadow:0 0 0 3px #fff, 0 0 0 10px rgba(23,74,64,0.15)}
   }
   .hpc-status{display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; padding:2px 8px; border-radius:10px; margin-bottom:6px}
   .hpc-name{font-family:'Archivo',sans-serif; font-weight:700; font-size:13px; margin-bottom:2px}
@@ -394,7 +406,14 @@ L.control.zoom({position:"bottomleft"}).addTo(map);
 // should never do since they're fixed UI chrome, not map content.
 (function(){
   const controlContainer = map.getContainer().querySelector(".leaflet-control-container");
-  if(controlContainer) map.getContainer().parentNode.appendChild(controlContainer);
+  if(controlContainer){
+    map.getContainer().parentNode.appendChild(controlContainer);
+    // The aside panel has z-index:300; Leaflet's own control-container defaults to a much
+    // higher z-index, so once reparented as a sibling it started rendering on TOP of the
+    // panel near the bottom-right corner (attribution text overlapping the nearby-list).
+    // Keep it below the panel so it's simply hidden behind the panel while open.
+    controlContainer.style.zIndex = "250";
+  }
 })();
 
 // Zoom toward cursor — GPU-composited live preview + single commit on settle
@@ -542,9 +561,52 @@ const PROJECT_STATUS_COLORS = {
   "Sakit":"#ef4444", "Siap Dengan CCC":"#2e7364", "Siap Dengan CFO":"#2e7364",
   "Permit Dibatalkan":"#111",
 };
+
+// Real point-in-Malaysia check against the district polygons we already have loaded.
+// The old lat/lon bounding box (1-7.5, 99-105.5) is too loose to exclude points that are
+// actually across the Malacca Strait (e.g. Dumai, Sumatra sits well inside that same box),
+// so bad geocoding was placing pins in the sea or a neighbouring country. Ray-casting against
+// the real district polygons, with a cheap per-district bbox pre-check for speed, catches this.
+function pointInRing(x, y, ring){
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function pointInGeom(lon, lat, geometry){
+  if(geometry.type === "Polygon"){
+    if(!pointInRing(lon, lat, geometry.coordinates[0])) return false;
+    for(let k=1; k<geometry.coordinates.length; k++){
+      if(pointInRing(lon, lat, geometry.coordinates[k])) return false; // inside a hole
+    }
+    return true;
+  } else if(geometry.type === "MultiPolygon"){
+    return geometry.coordinates.some(poly => pointInGeom(lon, lat, {type:"Polygon", coordinates: poly}));
+  }
+  return false;
+}
+const DISTRICT_BBOXES = DATA.features.map(f => {
+  let minLon=Infinity, minLat=Infinity, maxLon=-Infinity, maxLat=-Infinity;
+  function scanRing(ring){ ring.forEach(([lo,la])=>{ if(lo<minLon)minLon=lo; if(lo>maxLon)maxLon=lo; if(la<minLat)minLat=la; if(la>maxLat)maxLat=la; }); }
+  function scanGeom(g){ if(g.type==="Polygon"){ g.coordinates.forEach(scanRing); } else if(g.type==="MultiPolygon"){ g.coordinates.forEach(poly=>poly.forEach(scanRing)); } }
+  scanGeom(f.geometry);
+  return {minLon, minLat, maxLon, maxLat, feature:f};
+});
+function isInsideAnyDistrict(lat, lon){
+  for(const b of DISTRICT_BBOXES){
+    if(lon<b.minLon || lon>b.maxLon || lat<b.minLat || lat>b.maxLat) continue;
+    if(pointInGeom(lon, lat, b.feature.geometry)) return true;
+  }
+  return false;
+}
 (TEDUH.projects || []).forEach(proj => {
   if(!proj.lat || !proj.lon) return;
   if(proj.lat<1 || proj.lat>7.5 || proj.lon<99 || proj.lon>105.5) return;
+  if(!isInsideAnyDistrict(proj.lat, proj.lon)) return;
   const color = PROJECT_STATUS_COLORS[proj.status] || "#999";
   const icon = L.divIcon({
     className:"",
@@ -567,6 +629,7 @@ const PROJECT_STATUS_COLORS = {
 (NEWLAUNCHES.projects || []).forEach(nl => {
   if(!nl.lat || !nl.lon) return;
   if(nl.lat<1 || nl.lat>7.5 || nl.lon<99 || nl.lon>105.5) return;
+  if(!isInsideAnyDistrict(nl.lat, nl.lon)) return;
   const nlIcon = L.divIcon({
     className:"",
     iconSize:[24,32], iconAnchor:[12,32],
@@ -964,11 +1027,15 @@ const panel = document.getElementById("panel");
 const handle = document.getElementById("panelHandle");
 const peek = document.getElementById("panelPeek");
 function openPanel(){ panel.classList.add("open"); }
-function closePanel(){ panel.classList.remove("open"); }
+function closePanel(){
+  panel.classList.remove("open");
+  if(selectedProjectMarker){ map.removeLayer(selectedProjectMarker); selectedProjectMarker = null; }
+}
 function resetPanelToBrowse(){
   document.getElementById("panel").innerHTML = '<div class="panel-handle" id="panelHandle"></div><div class="panel-peek" id="panelPeek">Browse districts</div><div class="empty">Click a district to explore its data.</div>';
   const h = document.getElementById("panelHandle");
   if(h) h.addEventListener("click", () => document.getElementById("panel").classList.toggle("open"));
+  if(selectedProjectMarker){ map.removeLayer(selectedProjectMarker); selectedProjectMarker = null; }
 }
 function setPeek(text){ if(peek) peek.textContent = text; }
 if(handle) handle.addEventListener("click", ()=> panel.classList.toggle("open"));
@@ -1103,6 +1170,7 @@ function statusClass(s){
 
 let radiusCircle = null;
 let jumpHighlight = null;
+let selectedProjectMarker = null; // persistent marker for whichever project's detail panel is currently open
 function jumpToPoint(lat, lon, zoom){
   if(jumpHighlight){ map.removeLayer(jumpHighlight); jumpHighlight = null; }
   map.setView([lat, lon], zoom || 16);
@@ -1316,6 +1384,13 @@ function showProject(proj){
   const panelEl = document.getElementById("panel");
   if(panelEl) panelEl.scrollTop = 0;
   if(proj.lat && proj.lon) map.setView([proj.lat, proj.lon], 15);
+  if(selectedProjectMarker){ map.removeLayer(selectedProjectMarker); selectedProjectMarker = null; }
+  if(proj.lat && proj.lon){
+    selectedProjectMarker = L.marker([proj.lat, proj.lon], {
+      icon: L.divIcon({className:"", iconSize:[34,34], iconAnchor:[17,17], html:'<div class="selected-project-ring"></div>'}),
+      interactive:false, zIndexOffset:1000
+    }).addTo(map);
+  }
   const statusColors = {Lancar:"#dcfce7|#166534", Lewat:"#fef3c7|#92400e", Sakit:"#fee2e2|#991b1b", "Belum Mula":"#f3f4f6|#4b5563"};
   const [bg,fg] = (statusColors[proj.status]||"#f3f4f6|#4b5563").split("|");
   const headerBg = {Lancar:"var(--teal-5)", Lewat:"#b45309", Sakit:"#991b1b", "Belum Mula":"#374151"}[proj.status]||"var(--teal-5)";
@@ -1591,6 +1666,10 @@ window.jumpToPoint = jumpToPoint;
 window.onRadiusChange = onRadiusChange;
 window.showNearbyHover = showNearbyHover;
 window.hideNearbyHover = hideNearbyHover;
+window.amenityLayers = amenityLayers;
+window.TEDUH = TEDUH;
+window.NEWLAUNCHES = NEWLAUNCHES;
+window.isInsideAnyDistrict = isInsideAnyDistrict;
 
 }
 main().catch(e=>{
