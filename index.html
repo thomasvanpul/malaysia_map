@@ -358,24 +358,48 @@ document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length
 const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0.9, zoomSnap:0.5, zoomDelta:0.5, bounceAtZoomLimits:false, zoomControl:false});
 L.control.zoom({position:"bottomleft"}).addTo(map);
 
-// Zoom toward cursor — clean version, no pan correction
+// Zoom toward cursor — GPU-composited live preview + single commit on settle
 (function(){
   const c = map.getContainer();
+  c.style.willChange = "transform";
+  const MAX_LIVE_DELTA = 1.5; // re-baseline before scale runs away on fast/long gestures
   let raf = null;
-  let nextZoom = null;
-  let nextPoint = null;
+  let committedZoom = map.getZoom();
+  let liveZoom = null;
+  let point = null;
+  let settleTimer = null;
+  let rebasing = false;
+  map.on("zoomend", function(){ if(!settleTimer && !rebasing) committedZoom = map.getZoom(); });
+  function paint(){
+    raf = null;
+    if(liveZoom === null || point === null) return;
+    if(Math.abs(liveZoom - committedZoom) > MAX_LIVE_DELTA){
+      rebasing = true;
+      map.setZoomAround(L.point(point.x, point.y), liveZoom, {animate:false});
+      committedZoom = liveZoom;
+      rebasing = false;
+    }
+    const scale = Math.pow(2, liveZoom - committedZoom);
+    c.style.transformOrigin = point.x + "px " + point.y + "px";
+    c.style.transform = "scale(" + scale + ")";
+  }
   c.addEventListener("wheel", function(e){
     e.preventDefault();
     const rect = c.getBoundingClientRect();
-    nextPoint = L.point(e.clientX - rect.left, e.clientY - rect.top);
+    point = {x: e.clientX - rect.left, y: e.clientY - rect.top};
     const delta = -e.deltaY * (e.deltaMode === 1 ? 0.1 : e.deltaMode === 2 ? 1 : 0.01);
-    nextZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), (nextZoom !== null ? nextZoom : map.getZoom()) + delta));
-    if(raf) return;
-    raf = requestAnimationFrame(function(){
-      map.setZoomAround(nextPoint, nextZoom, {animate:false});
-      nextZoom = null;
-      raf = null;
-    });
+    liveZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), (liveZoom !== null ? liveZoom : committedZoom) + delta));
+    if(!raf) raf = requestAnimationFrame(paint);
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(function(){
+      const finalZoom = liveZoom, finalPoint = point;
+      c.style.transform = "";
+      c.style.transformOrigin = "";
+      map.setZoomAround(L.point(finalPoint.x, finalPoint.y), finalZoom, {animate:false});
+      committedZoom = finalZoom;
+      liveZoom = null;
+      settleTimer = null;
+    }, 140);
   }, {passive:false});
 })();
 L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
