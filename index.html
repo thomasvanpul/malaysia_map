@@ -422,6 +422,42 @@ document.getElementById("lg-min").textContent = fmt(sortedPops[0]);
 document.getElementById("lg-max").textContent = fmt(sortedPops[sortedPops.length-1]);
 
 const map = L.map("map",{scrollWheelZoom:false, maxZoom:16, maxBoundsViscosity:0.9, zoomSnap:0.5, zoomDelta:0.5, bounceAtZoomLimits:false, zoomControl:false});
+// Search bar was fixed-centered with a fixed max-width, independent of the brand bar and
+// control bar around it — as the control bar grew (now 5 elements: Transit/Projects/New
+// Launches/Amenities/State), it started overlapping the search bar on completely normal
+// desktop widths (~1334-1366px, a very common laptop resolution, confirmed via direct
+// measurement, not just a narrow/mobile edge case). A fixed CSS breakpoint is brittle since
+// control bar width varies with content, so position it dynamically from actual measured
+// widths instead, recalculated on resize.
+function repositionSearchBar(){
+  const searchBar = document.getElementById("searchBar");
+  const brandBar = document.getElementById("brandBar");
+  const controlBar = document.getElementById("controlBar");
+  if(!searchBar || !brandBar || !controlBar) return;
+  if(window.innerWidth <= 900) { // mobile layout already handles this via CSS stacking
+    searchBar.style.left = ""; searchBar.style.right = ""; searchBar.style.transform = "";
+    searchBar.style.maxWidth = "";
+    return;
+  }
+  const margin = 12;
+  const leftBound = brandBar.getBoundingClientRect().right + margin;
+  const rightBound = window.innerWidth - controlBar.getBoundingClientRect().left + margin;
+  const available = window.innerWidth - leftBound - rightBound;
+  searchBar.style.transform = "none";
+  if(available < 260){
+    // Genuinely not enough room even after dropping centering — shrink to fit rather than overlap
+    searchBar.style.left = leftBound + "px";
+    searchBar.style.right = rightBound + "px";
+    searchBar.style.maxWidth = "none";
+  } else {
+    const width = Math.min(420, available);
+    const center = leftBound + available/2;
+    searchBar.style.left = (center - width/2) + "px";
+    searchBar.style.right = "auto";
+    searchBar.style.maxWidth = width + "px";
+  }
+}
+window.addEventListener("resize", repositionSearchBar);
 // IMPORTANT: everything in this file lives inside async function main(), so none of it is
 // visible in the global scope that inline HTML attributes (onclick="...", oninput="...", etc.)
 // execute in. Worse, `id="map"` on a DOM element makes `window.map` auto-resolve to that DIV,
@@ -1169,6 +1205,7 @@ const sel = document.getElementById("stateSel");
 Object.keys(stateLayers).sort().forEach(st=>{
   const o=document.createElement("option"); o.value=o.textContent=st; sel.appendChild(o);
 });
+repositionSearchBar(); // control bar's width just changed (state options added) — reposition now that layout is final
 let highlightedStateLayers = [];
 sel.onchange = ()=>{
   highlightedStateLayers.forEach(l=>layer.resetStyle(l));
@@ -1264,16 +1301,34 @@ function scoreRing(score){
     <div class="val" style="color:${col}">${score}</div>
   </div>`;
 }
-function scoreStars(score, size){
+function scoreStars(score, size, breakdownFactors){
   const col = scoreColor(score);
   const pct = Math.max(0, Math.min(100, score));
   const fs = size || 24;
-  return `<div style="display:flex;align-items:center;gap:${Math.round(fs*0.4)}px;flex-wrap:wrap">
-    <div style="position:relative;line-height:1;font-size:${fs}px;letter-spacing:${Math.round(fs*0.08)}px">
+  const starsHtml = `<div style="position:relative;line-height:1;font-size:${fs}px;letter-spacing:${Math.round(fs*0.08)}px">
       <div style="color:#e3ded4">★★★★★</div>
       <div style="position:absolute;top:0;left:0;overflow:hidden;width:${pct}%;white-space:nowrap;color:${col}">★★★★★</div>
+    </div>`;
+  const numberHtml = `<div style="font-family:'Archivo',sans-serif;font-weight:800;font-size:${Math.round(fs*0.62)}px;color:${col}">${score}/100</div>`;
+  if(!breakdownFactors || !breakdownFactors.length){
+    return `<div style="display:flex;align-items:center;gap:${Math.round(fs*0.4)}px;flex-wrap:wrap">${starsHtml}${numberHtml}</div>`;
+  }
+  const id = "scorebd_" + Math.random().toString(36).slice(2,9);
+  const rows = breakdownFactors.map(function(f){
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--line)">
+      <div style="display:flex;gap:7px;align-items:flex-start">
+        <span style="flex-shrink:0;font-size:12px">${f.good?"✓":"–"}</span>
+        <div><b style="font-size:12px">${f.label}</b><div style="font-size:11px;color:var(--muted)">${f.detail}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);white-space:nowrap">${f.score}/${f.max}</div>
+    </div>`;
+  }).join("");
+  return `<div>
+    <div style="display:flex;align-items:center;gap:${Math.round(fs*0.4)}px;flex-wrap:wrap;cursor:pointer" onclick="const el=document.getElementById('${id}'); const arrow=this.querySelector('.bd-arrow'); const open=el.style.display==='block'; el.style.display=open?'none':'block'; if(arrow) arrow.textContent=open?'▾':'▴';">
+      ${starsHtml}${numberHtml}
+      <span style="font-size:10px;color:var(--teal-4);font-weight:700">See breakdown <span class="bd-arrow">▾</span></span>
     </div>
-    <div style="font-family:'Archivo',sans-serif;font-weight:800;font-size:${Math.round(fs*0.62)}px;color:${col}">${score}/100</div>
+    <div id="${id}" style="display:none;margin-top:4px">${rows}</div>
   </div>`;
 }
 
@@ -1704,7 +1759,7 @@ function showProject(proj){
       ${proj.expected_completion?`<div class="prop-cell"><div class="val">${proj.expected_completion}</div><div class="lbl">Expected CCC</div></div>`:""}
       ${proj.bumi_quota_pct?`<div class="prop-cell"><div class="val">${proj.bumi_quota_pct}%</div><div class="lbl">Bumi quota</div></div>`:""}
       <div class="prop-cell"><div class="val">${proj.state||"—"}</div><div class="lbl">State</div></div>
-      ${score!==null?`<div class="prop-cell"><div style="margin-top:2px">${scoreStars(score, 15)}</div><div class="lbl" style="margin-top:4px">Area investment score</div></div>`:""}
+      ${score!==null?`<div class="prop-cell"><div style="margin-top:2px">${scoreStars(score, 15, investScoreBreakdown(districtData).factors)}</div><div class="lbl" style="margin-top:4px">Area investment score</div></div>`:""}
     </div>
     ${buildUnitSection(proj)}
     ${(proj.developer?.phone||proj.developer?.email||proj.developer?.website)?`
