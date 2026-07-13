@@ -494,8 +494,8 @@ L.control.zoom({position:"bottomleft"}).addTo(map);
     }, 140);
   }, {passive:false});
 })();
-L.tileLayer("https://api.maptiler.com/maps/dataviz-light/{z}/{x}/{y}.png?key=r1vaJcTInBX0Pvp3CevE",
-  {attribution:"&copy; MapTiler &copy; OpenStreetMap contributors", maxZoom:19, keepBuffer:8, updateWhenIdle:false, updateWhenZooming:false}).addTo(map);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+  {attribution:"&copy; CARTO &copy; OpenStreetMap contributors", subdomains:"abcd", detectRetina:true, maxZoom:19, keepBuffer:8, updateWhenIdle:false, updateWhenZooming:false}).addTo(map);
 
 // Amenity layers - built once, toggled by chips
 const COLORS = {rail:"#174a40", mall:"#a94e2c", sup:"#5f6f24"};
