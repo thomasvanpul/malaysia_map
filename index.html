@@ -483,6 +483,22 @@ function makeDot(color, r){
   return L.divIcon({className:"", iconSize:[r*2,r*2],
     html:`<div class="marker-dot" style="width:${r*2}px;height:${r*2}px;background:${color}"></div>`});
 }
+// Category icons for cluster badges — a plain number-in-a-circle doesn't communicate what
+// kind of thing is clustered there until you zoom in. These give the cluster itself a
+// recognizable shape (house for property listings, cap for schools, cross for hospitals),
+// with the count moved to a small corner badge instead of being the whole icon.
+const CLUSTER_ICON_HOUSE = `<path d="M12 3.2 4 9.4V20h5.2v-6.4h5.6V20H20V9.4z"/>`;
+const CLUSTER_ICON_CAP = `<path d="M12 4 2 9l10 5 8-4v6h1.5V9L12 4zm-6 8.2V16c0 1.8 2.7 3.2 6 3.2s6-1.4 6-3.2v-3.8l-6 3-6-3z"/>`;
+const CLUSTER_ICON_CROSS = `<path d="M10.2 3h3.6v6.2H20v3.6h-6.2V19h-3.6v-6.2H4V9.2h6.2z"/>`;
+function clusterIconHTML(n, sz, col, iconPath){
+  const badge = n>999 ? "999+" : n;
+  return `<div style="position:relative;width:${sz}px;height:${sz}px">
+    <div style="width:100%;height:100%;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">
+      <svg viewBox="0 0 24 24" width="${Math.round(sz*0.52)}" height="${Math.round(sz*0.52)}" fill="#fff">${iconPath}</svg>
+    </div>
+    <div style="position:absolute;bottom:-3px;right:-3px;min-width:18px;height:18px;padding:0 3px;border-radius:9px;background:#fff;color:${col};display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${badge.toString().length>2?9:10}px;border:2px solid ${col}">${badge}</div>
+  </div>`;
+}
 const amenityLayers = {
   rail: L.layerGroup(),
   mall: L.layerGroup(),
@@ -501,7 +517,7 @@ const amenityLayers = {
       const col = "#0369A1";
       return L.divIcon({
         className:"",
-        html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?11:13}px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+        html: clusterIconHTML(n, sz, col, CLUSTER_ICON_HOUSE),
         iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
       });
     }
@@ -512,7 +528,7 @@ const amenityLayers = {
     iconCreateFunction: function(cluster){
       const n = cluster.getChildCount();
       const sz = n>50?46:n>20?38:30;
-      return L.divIcon({className:"", html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:#0369a1;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?10:12}px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+      return L.divIcon({className:"", html: clusterIconHTML(n, sz, "#0369a1", CLUSTER_ICON_CAP),
         iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]});
     }
   }),
@@ -522,7 +538,7 @@ const amenityLayers = {
     iconCreateFunction: function(cluster){
       const n = cluster.getChildCount();
       const sz = n>50?46:n>20?38:30;
-      return L.divIcon({className:"", html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:#be123c;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?10:12}px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+      return L.divIcon({className:"", html: clusterIconHTML(n, sz, "#be123c", CLUSTER_ICON_CROSS),
         iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]});
     }
   }),
@@ -539,7 +555,7 @@ const amenityLayers = {
       const col = "#e0a422";
       return L.divIcon({
         className:"",
-        html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:${n>99?11:13}px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n>999?"999+":n}</div>`,
+        html: clusterIconHTML(n, sz, col, CLUSTER_ICON_HOUSE),
         iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
       });
     }
