@@ -15,10 +15,35 @@ from datetime import datetime
 
 WEST_MALAYSIA = {
     "01": "Johor", "02": "Kedah", "03": "Kelantan", "04": "Melaka",
-    "05": "Negeri Sembilan", "06": "Pahang", "07": "Perak", "08": "Perlis",
-    "09": "Pulau Pinang", "10": "Selangor", "11": "Terengganu",
+    "05": "Negeri Sembilan", "06": "Pahang", "07": "Pulau Pinang", "08": "Perak",
+    "09": "Perlis", "10": "Selangor", "11": "Terengganu",
     "14": "W.P. Kuala Lumpur", "15": "W.P. Labuan", "16": "W.P. Putrajaya",
+    # Best-guess codes for East Malaysia, pending live confirmation — kept as a label lookup
+    # only. Actual inclusion below does NOT depend on getting these numbers right: any
+    # project is included if its own lat/lon falls in East Malaysia, regardless of what its
+    # kod_negeri_id says, so a wrong guess here just means a wrong "state" text label on a
+    # handful of projects, not a missing/broken project.
+    "12": "Sabah", "13": "Sarawak",
 }
+EAST_MALAYSIA_BBOX = (0.8, 109.4, 7.5, 119.5)  # lat_min, lon_min, lat_max, lon_max
+def in_scope(p):
+    if p.get("kod_negeri_id") in WEST_MALAYSIA:
+        return True
+    try:
+        lat, lon = float(p.get("latitud")), float(p.get("longitud"))
+        return EAST_MALAYSIA_BBOX[0] <= lat <= EAST_MALAYSIA_BBOX[2] and EAST_MALAYSIA_BBOX[1] <= lon <= EAST_MALAYSIA_BBOX[3]
+    except (TypeError, ValueError):
+        return False
+def east_malaysia_state_guess(lat, lon):
+    """Rough Sabah/Sarawak split by longitude for projects whose kod_negeri_id we don't
+    recognize but whose coordinates place them in East Malaysia. Sarawak is the western
+    two-thirds of Borneo's Malaysian portion, Sabah the northeastern third — 115.0°E is a
+    reasonable dividing line for this purpose (display label only, not used for placement)."""
+    if lat is None or lon is None:
+        return None
+    if not (EAST_MALAYSIA_BBOX[0] <= lat <= EAST_MALAYSIA_BBOX[2] and EAST_MALAYSIA_BBOX[1] <= lon <= EAST_MALAYSIA_BBOX[3]):
+        return None
+    return "Sarawak" if lon < 115.0 else "Sabah"
 
 STATUS_MAP = {
     "0": "Belum Mula", "1": "Lancar", "2": "Sakit", "3": "Lewat",
@@ -56,7 +81,7 @@ def clean(p):
         "name": p.get("nama"),
         "phase": p.get("kod_fasa"),
         "state_code": sc,
-        "state": WEST_MALAYSIA.get(sc, ""),
+        "state": WEST_MALAYSIA.get(sc) or east_malaysia_state_guess(lat, lon) or "",
         "lat": lat,
         "lon": lon,
         "status": STATUS_MAP.get(p.get("status_projek", ""), p.get("status_projek", "")),
@@ -92,7 +117,7 @@ def process_page(raw):
     proj_meta = raw.get("projects", {})
     data = proj_meta.get("data", [])
     for p in data:
-        if p.get("kod_negeri_id") in WEST_MALAYSIA:
+        if in_scope(p):
             all_projects.append(clean(p))
 
 process_page(raw)

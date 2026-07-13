@@ -1,6 +1,6 @@
-# West Malaysia District Explorer
+# Malaysia District Explorer
 
-An interactive choropleth map of all 91 Peninsular Malaysia districts. Click any
+An interactive choropleth map of all 159 Malaysia districts (Peninsular + Sabah & Sarawak). Click any
 district for its population, household income, poverty rates, ethnicity
 breakdown, and multi-year trends — or compare any two districts side by side,
 even across states. Amenity and transit layers overlay rail stations, malls,

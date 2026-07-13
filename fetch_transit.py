@@ -15,12 +15,14 @@ OVERPASS_MIRRORS = [
     "https://overpass.kumi.systems/api/interpreter",
 ]
 HEADERS = {"User-Agent": "west-malaysia-district-explorer/1.2 (student project)"}
-BBOX = "0.8,99.4,6.9,104.7"
-
-QUERY = f"""
+PENINSULAR_BBOX = "0.8,99.4,6.9,104.7"
+EAST_MALAYSIA_BBOX = "0.8,109.4,7.5,119.5"  # Sabah + Sarawak + Labuan - picks up the Sabah
+                                            # State Railway, the only rail line there
+def build_query(bbox):
+    return f"""
 [out:json][timeout:600];
 (
-  relation["type"="route"]["route"~"^(subway|light_rail|monorail|train|tram)$"]({BBOX});
+  relation["type"="route"]["route"~"^(subway|light_rail|monorail|train|tram)$"]({bbox});
 );
 out body;
 >>;
@@ -101,9 +103,11 @@ def stitch(way_geoms):
     return chains
 
 
-print("querying OSM for rail routes...")
-data = overpass(QUERY)
-elements = data["elements"]
+elements = []
+for region_name, bbox in [("Peninsular", PENINSULAR_BBOX), ("East Malaysia", EAST_MALAYSIA_BBOX)]:
+    print(f"querying OSM for rail routes in {region_name}...")
+    data = overpass(build_query(bbox))
+    elements.extend(data["elements"])
 
 ways = {e["id"]: [(g["lon"], g["lat"]) for g in e["geometry"]]
         for e in elements if e["type"] == "way" and "geometry" in e}
