@@ -1442,10 +1442,17 @@ function renderNearbyList(proj, radiusKm){
 
   function rowHTML(items, emoji, kind){
     return items.map(function(p){
+      const t = travelEstimates(p.km);
+      const gurl = gmapsDirUrl(proj.lat, proj.lon, p.lat, p.lon, "driving");
       return `<div class="proj-item nearby-item" style="padding:6px 0;position:relative" onclick="jumpToPoint(${p.lat},${p.lon},16)" onmouseenter="showNearbyHover(this,'${(p.name||"").replace(/'/g,"&#39;")}','${kind}','${fmtDist(p.km)}')" onmouseleave="hideNearbyHover(this)">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:13px">${emoji} ${p.name}</span>
           <span style="font-size:11px;color:var(--muted);background:var(--panel);padding:2px 6px;border-radius:8px">${fmtDist(p.km)}</span>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:4px;font-size:11px;color:var(--muted)">
+          <span>🚶 ~${t.walkMin}min</span>
+          <span>🚴 ~${t.bikeMin}min</span>
+          <a href="${gurl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--teal-4);text-decoration:none;font-weight:600">🚗 Directions →</a>
         </div></div>`;
     }).join("");
   }
@@ -1453,10 +1460,17 @@ function renderNearbyList(proj, radiusKm){
     return items.map(function(p){
       const kind = p.__kind==="newlaunch" ? "New launch" : (p.status||"Project");
       const emoji = p.__kind==="newlaunch" ? "🏗️" : "🏘️";
+      const t = travelEstimates(p.km);
+      const gurl = gmapsDirUrl(proj.lat, proj.lon, p.lat, p.lon, "driving");
       return `<div class="proj-item nearby-item" style="padding:6px 0;position:relative" onclick="openNearbyProp('${p.name.replace(/'/g,"&#39;")}',${p.lat},${p.lon})" onmouseenter="showNearbyHover(this,'${p.name.replace(/'/g,"&#39;")}','${kind}','${fmtDist(p.km)}')" onmouseleave="hideNearbyHover(this)">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:13px">${emoji} ${p.name}</span>
           <span style="font-size:11px;color:var(--muted);background:var(--panel);padding:2px 6px;border-radius:8px">${fmtDist(p.km)}</span>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:4px;font-size:11px;color:var(--muted)">
+          <span>🚶 ~${t.walkMin}min</span>
+          <span>🚴 ~${t.bikeMin}min</span>
+          <a href="${gurl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--teal-4);text-decoration:none;font-weight:600">🚗 Directions →</a>
         </div></div>`;
     }).join("");
   }
@@ -1534,6 +1548,24 @@ function nearbyItems(lat,lon,points,maxN,maxKm){
     .slice(0,maxN);
 }
 function fmtDist(km){return km<1?(km*1000).toFixed(0)+"m":(km).toFixed(1)+"km";}
+function travelEstimates(km){
+  // Straight-line estimates at typical average speeds — NOT real routing. Labeled "~" for
+  // exactly that reason. Real turn-by-turn directions are handled by linking out to Google
+  // Maps (below) rather than us re-implementing routing: the public OSRM demo server's
+  // /bike/ and /foot/ endpoints were checked and confirmed to silently alias to the same
+  // car-routing graph (identical weight_name, identical duration for all three profiles on
+  // a real test), so treating them as genuine multi-modal routing would be misleading. And
+  // after the MapTiler quota lesson this session, adding another external API dependency
+  // with its own quota risk for a rougher result than what's already on everyone's phone
+  // isn't the right trade.
+  return {
+    walkMin: Math.max(1, Math.round(km / 5 * 60)),
+    bikeMin: Math.max(1, Math.round(km / 15 * 60)),
+  };
+}
+function gmapsDirUrl(fromLat, fromLon, toLat, toLon, mode){
+  return `https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLon}&destination=${toLat},${toLon}&travelmode=${mode}`;
+}
 function formatAddress(addr){
   if(!addr) return "";
   let s = String(addr).trim().replace(/\s+/g," ").replace(/\s*,\s*/g, ", ");
