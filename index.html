@@ -161,8 +161,22 @@
   .chip.transit.on{background:#333;border-color:#333}
   .chip.projects.on{background:#0369A1;border-color:#0369A1}
   .chip.newlaunches.on{background:#e0a422;border-color:#e0a422}
-  .chip.schools.on{background:#0369a1;border-color:#0369a1}
+  .chip.schools.on{background:#7c3aed;border-color:#7c3aed}
   .chip.hospitals.on{background:#be123c;border-color:#be123c}
+  .amenities-dropdown{position:relative}
+  .amenities-btn{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 12px;border:1px solid rgba(0,0,0,0.06);border-radius:20px;background:rgba(255,255,255,0.5);color:var(--muted);cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .amenities-btn.has-active{background:var(--teal-5);color:#fff;border-color:var(--teal-5)}
+  .amenities-btn .chev{font-size:9px;transition:transform 0.15s}
+  .amenities-dropdown.open .chev{transform:rotate(180deg)}
+  .amenities-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:400;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(23,74,64,0.18);padding:8px;min-width:190px;display:none}
+  .amenities-dropdown.open .amenities-panel{display:block}
+  .amenity-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink)}
+  .amenity-row:hover{background:var(--paper)}
+  .amenity-row .swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .amenity-row input{margin-left:auto;accent-color:var(--teal-5);cursor:pointer}
+  .amenity-row.disabled{opacity:0.45;cursor:default}
+  .amenity-row.disabled:hover{background:none}
+  .amenity-row .soon{font-size:9px;color:var(--muted);margin-left:auto;text-transform:uppercase;letter-spacing:0.04em}
   .amen-pop{font-family:'IBM Plex Sans',sans-serif;max-width:260px}
   .amen-pop img{width:100%;height:140px;object-fit:cover;border-radius:6px 6px 0 0;display:block;background:#eee}
   .amen-pop .body{padding:10px 12px 12px}
@@ -357,8 +371,15 @@
   <span class="chip transit" data-layer="transit"><span class="dot"></span>Transit</span>
   <span class="chip projects" data-layer="projects"><span class="dot"></span>Projects</span>
   <span class="chip newlaunches" data-layer="newlaunches"><span class="dot"></span>New Launches</span>
-  <span class="chip schools" data-layer="schools"><span class="dot"></span>Schools</span>
-  <span class="chip hospitals" data-layer="hospitals"><span class="dot"></span>Hospitals</span>
+  <div class="amenities-dropdown" id="amenitiesDropdown">
+    <button class="amenities-btn" id="amenitiesBtn" type="button">Amenities <span class="chev">▾</span></button>
+    <div class="amenities-panel">
+      <label class="amenity-row" data-layer="schools"><span class="swatch" style="background:#7c3aed"></span>Schools<input type="checkbox"></label>
+      <label class="amenity-row" data-layer="hospitals"><span class="swatch" style="background:#be123c"></span>Hospitals<input type="checkbox"></label>
+      <label class="amenity-row" data-layer="sup"><span class="swatch" style="background:#5f6f24"></span>Supermarkets<input type="checkbox"></label>
+      <label class="amenity-row" data-layer="mall"><span class="swatch" style="background:#a94e2c"></span>Malls<input type="checkbox"></label>
+    </div>
+  </div>
   <select id="stateSel"><option value="">All states</option></select>
 </div>
 <div class="wrap">
@@ -528,7 +549,7 @@ const amenityLayers = {
     iconCreateFunction: function(cluster){
       const n = cluster.getChildCount();
       const sz = n>50?46:n>20?38:30;
-      return L.divIcon({className:"", html: clusterIconHTML(n, sz, "#0369a1", CLUSTER_ICON_CAP),
+      return L.divIcon({className:"", html: clusterIconHTML(n, sz, "#7c3aed", CLUSTER_ICON_CAP),
         iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]});
     }
   }),
@@ -563,7 +584,7 @@ const amenityLayers = {
 };
 // Populate schools + hospitals
 (function(){
-  const COLORS2 = {schools:"#0369a1", hospitals:"#be123c"};
+  const COLORS2 = {schools:"#7c3aed", hospitals:"#be123c"};
   const CATS = {schools:"school_points", hospitals:"hospital_points"};
   ["schools","hospitals"].forEach(kind => {
     const col = COLORS2[kind];
@@ -932,30 +953,59 @@ const supHint = document.createElement("div");
 supHint.style.cssText = "position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--panel);border:1.5px solid var(--amber);color:var(--ink);font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;box-shadow:0 1px 4px rgba(0,0,0,.18);display:none;pointer-events:none";
 document.getElementById("map").appendChild(supHint);
 function updateSupHint(){
-  const chip = document.querySelector('.chip[data-layer="sup"]');
-  const gated = chip && chip.classList.contains("on") && map.getZoom() < ZOOM_HIDE.sup;
+  const input = document.querySelector('.amenity-row[data-layer="sup"] input');
+  const gated = input && input.checked && map.getZoom() < ZOOM_HIDE.sup;
   supHint.textContent = `Zoom in to see ${supCount.toLocaleString()} supermarkets`;
   supHint.style.display = gated ? "block" : "none";
 }
 // Chips
+function setAmenityLayerOn(k, on){
+  if(on){
+    const minZ = ZOOM_HIDE[k];
+    if(!(minZ && map.getZoom() < minZ)) amenityLayers[k].addTo(map);
+  } else {
+    map.removeLayer(amenityLayers[k]);
+    if(k==="transit"){
+      ALL_STATION_MARKERS.forEach(m=>map.removeLayer(m));
+      Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
+      prevHL=null;
+    }
+  }
+  if(k==="sup") updateSupHint();
+}
 document.querySelectorAll(".chip").forEach(chip=>{
   chip.onclick = ()=>{
     const k = chip.dataset.layer;
     const on = chip.classList.toggle("on");
-    if(on){
-      const minZ = ZOOM_HIDE[k];
-      if(!(minZ && map.getZoom() < minZ)) amenityLayers[k].addTo(map);
-    } else {
-      map.removeLayer(amenityLayers[k]);
-      if(k==="transit"){
-        ALL_STATION_MARKERS.forEach(m=>map.removeLayer(m));
-        Object.values(routePolylines).flat().forEach(l=>l.setStyle({opacity:1,weight:4.5}));
-        prevHL=null;
-      }
-    }
-    if(k==="sup") updateSupHint();
+    setAmenityLayerOn(k, on);
   };
 });
+// Amenities dropdown — consolidates Schools/Hospitals/Supermarkets/Malls into one button
+// instead of a separate chip per category, with room to add more categories later.
+(function(){
+  const dropdown = document.getElementById("amenitiesDropdown");
+  const btn = document.getElementById("amenitiesBtn");
+  if(!dropdown || !btn) return;
+  btn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    dropdown.classList.toggle("open");
+  });
+  document.addEventListener("click", (e)=>{
+    if(!dropdown.contains(e.target)) dropdown.classList.remove("open");
+  });
+  function refreshButtonState(){
+    const anyOn = dropdown.querySelectorAll(".amenity-row input:checked").length > 0;
+    btn.classList.toggle("has-active", anyOn);
+  }
+  dropdown.querySelectorAll(".amenity-row").forEach(row=>{
+    const k = row.dataset.layer;
+    const input = row.querySelector("input");
+    input.addEventListener("change", ()=>{
+      setAmenityLayerOn(k, input.checked);
+      refreshButtonState();
+    });
+  });
+})();
 // Default view: transit lines + malls on
 const transitChip = document.querySelector('.chip[data-layer="transit"]');
 if(transitChip){
