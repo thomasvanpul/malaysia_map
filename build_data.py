@@ -33,7 +33,8 @@ SOURCES = {
 GEOJSON_FILE = "geoBoundaries-MYS-ADM2_simplified.geojson"
 
 WEST = ['Johor','Kedah','Kelantan','Melaka','Negeri Sembilan','Pahang','Perak','Perlis',
-        'Pulau Pinang','Selangor','Terengganu','W.P. Kuala Lumpur','W.P. Putrajaya']
+        'Pulau Pinang','Selangor','Terengganu','W.P. Kuala Lumpur','W.P. Putrajaya',
+        'Sabah','Sarawak','W.P. Labuan']  # name kept as WEST for min diff; now covers all Malaysia
 
 # Covers BOTH DOSM naming styles (population file vs income/poverty files)
 CLEAN = {
@@ -52,7 +53,22 @@ CLEAN = {
     "S.P.Utara": "Seberang Perai Utara",
     "Larut & Matang": "Larut dan Matang",
     "Hulu": "Hulu Terengganu",  # DOSM data-entry error (truncated, 2024 income row)
+    "Lubok antu": "Lubok Antu",  # capitalization mismatch vs geoBoundaries
+    # Sarawak/Sabah districts elevated from sub-district status (2021-2022) after this
+    # boundary dataset was published — geoBoundaries has no separate polygon for them yet,
+    # so their DOSM stats are merged back into the parent district they were carved from.
+    # Population is summed correctly (see MERGED_DISTRICTS aggregation below); income/poverty
+    # medians for these merged districts are a simple (non population-weighted) average of
+    # the parent + sub-district values — a documented approximation affecting only these 6
+    # of 159 districts, not worth a full weighted-aggregation pipeline for.
+    "Gedong": "Simunjan",       # elevated 2021, was part of Simunjan
+    "Sebuyau": "Simunjan",      # elevated 2021, was part of Simunjan
+    "Pantu": "Sri Aman",        # elevated 2021, was part of Sri Aman
+    "Lingga": "Sri Aman",       # elevated 2021, was part of Sri Aman
+    "Siburan": "Serian",        # elevated Nov 2021, was part of Serian
+    "Membakut": "Beaufort",     # Sabah sub-district, part of Beaufort
 }
+MERGED_DISTRICTS = {"Simunjan", "Sri Aman", "Serian", "Beaufort"}  # targets of the above merges
 
 KNOWN_NO_POLYGON = {"W.P. Putrajaya"}  # stats exist, boundary file has no shape
 
@@ -105,31 +121,58 @@ def main():
     for ft in feats:
         d = ft["properties"]["shapeName"]
         g = pop[(pop["district_clean"] == d) & (pop["date"] == latest_pop)]
+        # sum() not iloc[0]: for MERGED_DISTRICTS this correctly combines the parent
+        # district's row with its merged-in sub-district's row; for every other district
+        # there's only ever one matching row so sum() == that single value, unchanged.
         pick = lambda sx, ag, eth: float(
-            g[(g["sex"] == sx) & (g["age"] == ag) & (g["ethnicity"] == eth)]["population"].iloc[0])
-        eth = g[(g["sex"] == "both") & (g["age"] == "overall") & (g["ethnicity"] != "overall")]
-        tr = pop[(pop["district_clean"] == d) & (pop["sex"] == "both")
-                 & (pop["age"] == "overall") & (pop["ethnicity"] == "overall")].sort_values("date")
+            g[(g["sex"] == sx) & (g["age"] == ag) & (g["ethnicity"] == eth)]["population"].sum())
+        eth_rows = g[(g["sex"] == "both") & (g["age"] == "overall") & (g["ethnicity"] != "overall")]
+        eth_sums = {}
+        for r in eth_rows.itertuples():
+            eth_sums[r.ethnicity] = eth_sums.get(r.ethnicity, 0.0) + float(r.population)
+        tr_rows = pop[(pop["district_clean"] == d) & (pop["sex"] == "both")
+                 & (pop["age"] == "overall") & (pop["ethnicity"] == "overall")]
+        tr_sums = {}
+        for r in tr_rows.itertuples():
+            y = int(r.date.year)
+            tr_sums[y] = tr_sums.get(y, 0.0) + float(r.population)
         s = {
             "total": pick("both", "overall", "overall"),
             "male": pick("male", "overall", "overall"),
             "female": pick("female", "overall", "overall"),
-            "ethnicity": {r.ethnicity: float(r.population) for r in eth.itertuples()},
-            "trend": [[int(r.date.year), float(r.population)] for r in tr.itertuples()],
+            "ethnicity": eth_sums,
+            "trend": sorted([[y, v] for y, v in tr_sums.items()]),
             "state": g["state"].iloc[0],
         }
         di = inc[inc["district_clean"] == d].sort_values("date")
         if len(di):
-            last = di.iloc[-1]
-            s["income_mean"] = int(last["income_mean"])
-            s["income_median"] = int(last["income_median"])
-            s["income_year"] = int(last["date"].year)
-            s["income_trend"] = [[int(r.date.year), int(r.income_median)] for r in di.itertuples()]
+            if d in MERGED_DISTRICTS:
+                # simple average across merged sub-district rows for the latest date
+                # (documented approximation — see CLEAN dict comment above)
+                latest_date = di["date"].max()
+                latest_rows = di[di["date"] == latest_date]
+                s["income_mean"] = int(latest_rows["income_mean"].mean())
+                s["income_median"] = int(latest_rows["income_median"].mean())
+                s["income_year"] = int(latest_date.year)
+                trend_by_year = di.groupby(di["date"].dt.year)["income_median"].mean()
+                s["income_trend"] = [[int(y), int(v)] for y, v in trend_by_year.items()]
+            else:
+                last = di.iloc[-1]
+                s["income_mean"] = int(last["income_mean"])
+                s["income_median"] = int(last["income_median"])
+                s["income_year"] = int(last["date"].year)
+                s["income_trend"] = [[int(r.date.year), int(r.income_median)] for r in di.itertuples()]
         dp = pov[pov["district_clean"] == d].sort_values("date")
         if len(dp):
-            last = dp.iloc[-1]
-            s["poverty_absolute"] = float(last["poverty_absolute"])
-            s["poverty_relative"] = float(last["poverty_relative"])
+            if d in MERGED_DISTRICTS:
+                latest_date = dp["date"].max()
+                latest_rows = dp[dp["date"] == latest_date]
+                s["poverty_absolute"] = float(latest_rows["poverty_absolute"].mean())
+                s["poverty_relative"] = float(latest_rows["poverty_relative"].mean())
+            else:
+                last = dp.iloc[-1]
+                s["poverty_absolute"] = float(last["poverty_absolute"])
+                s["poverty_relative"] = float(last["poverty_relative"])
         ft["properties"]["stats"] = s
 
     # merge amenities (OSM-derived, generated separately by fetch_amenities.py)
