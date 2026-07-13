@@ -153,6 +153,26 @@ output = {
     "projects": all_projects,
 }
 
+# This is a LISTING refresh, not a detail crawl - it does not fetch unit types, pricing, or
+# brochure URLs (that's fetch_teduh_daily.py's job, run incrementally over time). Blindly
+# overwriting teduh_projects.json here would silently wipe out all of that accumulated detail
+# data for every existing project (this happened once already - caught and fixed by hand from
+# git history, this preserves it automatically from now on). Merge detail from whatever's
+# already on disk, keyed by project id, before writing.
+try:
+    with open("teduh_projects.json") as f:
+        existing = json.load(f)
+    existing_detail = {p["id"]: p.get("detail") for p in existing.get("projects", []) if p.get("detail")}
+    restored = 0
+    for p in output["projects"]:
+        d = existing_detail.get(p["id"])
+        if d:
+            p["detail"] = d
+            restored += 1
+    print(f"Preserved detail data for {restored} projects from the existing file", flush=True)
+except (FileNotFoundError, json.JSONDecodeError):
+    print("No existing teduh_projects.json found (or it's invalid) - nothing to preserve", flush=True)
+
 with open("teduh_projects.json", "w") as f:
     json.dump(output, f, ensure_ascii=False)
 
